@@ -1,6 +1,6 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -pthread
-LDFLAGS = -lcurl
+CXXFLAGS = -std=c++11 -Wall -pthread -Iinclude
+LDFLAGS = -lcurl -pthread
 
 TARGET = telegram_bot
 SRCDIR = src
