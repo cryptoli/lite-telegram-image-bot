@@ -53,6 +53,8 @@ public:
             std::ifstream file(filePath.c_str(), std::ios::binary);
             std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             return imageData;
+        } else {
+            log(LogLevel::WARNING,"Cache miss.");
         }
 
         return ""; // Cache miss

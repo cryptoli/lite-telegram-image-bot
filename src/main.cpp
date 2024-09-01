@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
     ThreadPool pool(4);
 
     // 创建 ImageCacheManager 实例，使用配置文件中的参数
-    ImageCacheManager cacheManager("./cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
+    ImageCacheManager cacheManager("cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
 
     // 启动服务器，在一个单独的线程中运行
     std::thread serverThread([&]() {
