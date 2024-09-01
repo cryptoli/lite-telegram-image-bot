@@ -3,7 +3,7 @@
 #include "thread_pool.h"
 #include "bot_handler.h"
 #include "server.h"
-#include "logger.h"
+#include "log.h"
 
 int main(int argc, char* argv[]) {
     // 加载配置文件
