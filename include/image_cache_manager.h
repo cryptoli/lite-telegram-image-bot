@@ -13,14 +13,27 @@
 #include <mutex>
 #include <thread>
 #include <algorithm>
+#include <limits.h>
 
 class ImageCacheManager {
 public:
     ImageCacheManager(const std::string& cacheDir, size_t maxDiskUsageMB, int maxCacheAgeSeconds)
-        : cacheDir(cacheDir), maxDiskUsageBytes(maxDiskUsageMB * 1024 * 1024), maxCacheAgeSeconds(maxCacheAgeSeconds) {
-        if (!directoryExists(cacheDir)) {
-            mkdir(cacheDir.c_str(), 0777);
+        : maxDiskUsageBytes(maxDiskUsageMB * 1024 * 1024), maxCacheAgeSeconds(maxCacheAgeSeconds) {
+
+        // 将相对路径转换为绝对路径
+        char absolutePath[PATH_MAX];
+        if (realpath(cacheDir.c_str(), absolutePath) != nullptr) {
+            this->cacheDir = std::string(absolutePath);
+        } else {
+            this->cacheDir = cacheDir;
+            log(LogLevel::ERROR, "Failed to resolve cache directory to absolute path: " + cacheDir);
         }
+
+        if (!directoryExists(this->cacheDir)) {
+            mkdir(this->cacheDir.c_str(), 0777);
+            log(LogLevel::INFO, "Created cache directory: " + this->cacheDir);
+        }
+
         cleanerThread = std::thread(&ImageCacheManager::cleanUpOldFiles, this);
     }
 
@@ -29,6 +42,7 @@ public:
         if (cleanerThread.joinable()) {
             cleanerThread.join();
         }
+        log(LogLevel::INFO, "Cache manager cleaned up and exited.");
     }
 
     void cacheImage(const std::string& fileId, const std::string& imageData) {
@@ -40,7 +54,9 @@ public:
             file.write(imageData.c_str(), imageData.size());
             file.close();
             lastAccessTimes[fileId] = std::chrono::system_clock::now();
-            std::cout << "Cached image: " << fileId << std::endl;
+            log(LogLevel::INFO, "Cached image: " + fileId + " at " + filePath);
+        } else {
+            log(LogLevel::ERROR, "Failed to open file for caching: " + filePath);
         }
     }
 
@@ -52,10 +68,15 @@ public:
             lastAccessTimes[fileId] = std::chrono::system_clock::now();
 
             std::ifstream file(filePath.c_str(), std::ios::binary);
-            std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            return imageData;
+            if (file.is_open()) {
+                std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                log(LogLevel::INFO, "Cache hit: " + fileId + " from " + filePath);
+                return imageData;
+            } else {
+                log(LogLevel::ERROR, "Failed to open cached file: " + filePath);
+            }
         } else {
-            log(LogLevel::WARNING,"Cache miss.");
+            log(LogLevel::WARNING, "Cache miss for file ID: " + fileId);
         }
 
         return ""; // Cache miss
@@ -124,7 +145,7 @@ private:
                     if (fileAge > maxCacheAgeSeconds) {
                         remove(filePath.c_str());
                         it = lastAccessTimes.erase(it);
-                        std::cout << "Removed old cached image: " << filePath << std::endl;
+                        log(LogLevel::INFO, "Removed old cached image: " + filePath);
                     } else {
                         ++it;
                     }
@@ -147,7 +168,7 @@ private:
                         currentCacheSize -= getFileSize(oldestFilePath);
                         remove(oldestFilePath.c_str());
                         lastAccessTimes.erase(oldest);
-                        std::cout << "Removed image due to disk space limit: " << oldestFilePath << std::endl;
+                        log(LogLevel::INFO, "Removed image due to disk space limit: " + oldestFilePath);
                     }
                 } else {
                     break;
