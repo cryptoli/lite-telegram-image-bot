@@ -108,7 +108,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
 }
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
-    std::string sendMessageUrl = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + message + "&parse_mode=MarkdownV2";
+    std::string sendMessageUrl = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + message;
     sendHttpRequest(sendMessageUrl);
 }
 
