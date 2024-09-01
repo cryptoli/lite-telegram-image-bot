@@ -1,3 +1,4 @@
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "server.h"
 #include "request_handler.h"
 #include "utils.h"
