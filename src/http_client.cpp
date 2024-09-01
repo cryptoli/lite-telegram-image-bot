@@ -2,7 +2,7 @@
 #include <curl/curl.h>
 #include <iostream>
 
-// 用于处理 CURL 回调，将响应内容写入字符串
+// 回调函数，用于处理 CURL 响应数据
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) {
     size_t newLength = size * nmemb;
     try {
@@ -45,6 +45,7 @@ std::string buildTelegramUrl(const std::string& apiToken, const std::string& cha
     std::string encoded_text;
 
     if (curl) {
+        // 对 text 参数进行 URL 编码
         char* encoded = curl_easy_escape(curl, text.c_str(), text.length());
         if (encoded) {
             encoded_text = encoded;
