@@ -8,10 +8,8 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
     std::string extension = filePath.substr(filePath.find_last_of("."));
     auto it = mimeTypes.find(extension);
     if (it != mimeTypes.end()) {
-        log(LogLevel::INFO, "111");
         return it->second;
     } else {
-        log(LogLevel::INFO, "222");
         return "application/octet-stream";
     }
 }
@@ -43,9 +41,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     std::string cachedImageData = cacheManager.getCachedImage(fileId);
     if (!cachedImageData.empty()) {
         // 如果缓存命中，返回缓存的数据
-        log(LogLevel::INFO, " before cache mimeType");
-        std::string mimeType = getMimeType(fileId, mimeTypes);
-        log(LogLevel::INFO, "cache mimeType:" + mimeType);
+        std::string mimeType = getMimeType(fileId + ".cache", mimeTypes);
         res.set_content(cachedImageData, mimeType);
         log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
         return;
