@@ -54,6 +54,14 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 log(LogLevel::INFO,"Sent GIF URL: " + customUrl + " to chat ID: " + chatId);
             }
 
+            // 处理贴纸
+            if (message.contains("sticker")) {
+                std::string fileId = message["sticker"]["file_id"];
+                std::string customUrl = baseUrl + "/stickers/" + fileId;
+                sendMessage(chatId, buildTelegramUrl("贴纸URL如下: " + customUrl));
+                log(LogLevel::INFO,"Sent sticker URL: " + customUrl + " to chat ID: " + chatId);
+            }
+
             // 处理回复中的文件
             if (message.contains("reply_to_message") && message.contains("text")) {
                 std::string text = message["text"];
