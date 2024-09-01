@@ -1,6 +1,7 @@
 #ifndef IMAGE_CACHE_MANAGER_H
 #define IMAGE_CACHE_MANAGER_H
 
+#include "utils.h"
 #include <string>
 #include <unordered_map>
 #include <chrono>
