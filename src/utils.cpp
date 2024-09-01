@@ -1,4 +1,6 @@
 #include "utils.h"
+#include <iostream>
+#include <fstream>
 #include <regex>
 
 bool isValidUrl(const std::string& url) {
