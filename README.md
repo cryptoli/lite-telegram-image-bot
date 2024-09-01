@@ -65,7 +65,7 @@ make
 {
     "server": {
         "hostname": "yourdomain.com",
-        "port": 8080
+        "port": 443
     },
     "api_token": "your_telegram_api_token_here",
     "mime_types": {
