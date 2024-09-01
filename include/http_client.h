@@ -4,6 +4,6 @@
 #include <string>
 
 std::string sendHttpRequest(const std::string& url);
-std::string buildTelegramUrl(const std::string& apiToken, const std::string& chatId, const std::string& text);
+std::string buildTelegramUrl(const std::string& text);
 
 #endif
