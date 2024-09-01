@@ -4,6 +4,7 @@
 #include "bot_handler.h"
 #include "server.h"
 #include "utils.h"
+#include <thread>
 
 int main(int argc, char* argv[]) {
     // 加载配置文件
@@ -18,17 +19,22 @@ int main(int argc, char* argv[]) {
     // 创建 ImageCacheManager 实例，使用配置文件中的参数
     ImageCacheManager cacheManager("./cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
 
-    // 启动服务器
-    startServer(config, cacheManager, pool);
+    // 启动服务器，在一个单独的线程中运行
+    std::thread serverThread([&]() {
+        startServer(config, cacheManager, pool);
+    });
 
     // 处理来自 Telegram API 的更新
     Bot bot(apiToken);
     int lastOffset = bot.getSavedOffset();
-    log("process bot updates...");
-    // 保持持续获取并处理更新的循环
+
+    // 主线程负责持续获取并处理更新
     while (true) {
         processBotUpdates(bot, pool, lastOffset, apiToken);
     }
+
+    // 确保服务器线程在程序退出前正确关闭
+    serverThread.join();
 
     return 0;
 }
