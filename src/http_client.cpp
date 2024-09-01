@@ -26,7 +26,7 @@ std::string sendHttpRequest(const std::string& url) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            log(LogLevel::ERROR,"curl_easy_perform() failed: " +res );
+            log(LogLevel::ERROR,"curl_easy_perform() failed!");
         }
         curl_easy_cleanup(curl);
     } else {
