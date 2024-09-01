@@ -10,8 +10,16 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
     if (it != mimeTypes.end()) {
         return it->second;
     } else {
-        return "image/jpeg";
+        return "application/octet-stream";
     }
+}
+
+std::string getFileExtension(const std::string& filePath) {
+    std::size_t pos = filePath.find_last_of(".");
+    if (pos != std::string::npos) {
+        return filePath.substr(pos);
+    }
+    return ""; // No extension found
 }
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager) {
@@ -37,17 +45,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     log(LogLevel::INFO,"Requesting file ID: " + fileId);
 
-    // 尝试从缓存中获取图片数据
-    std::string cachedImageData = cacheManager.getCachedImage(fileId);
-    if (!cachedImageData.empty()) {
-        log(LogLevel::INFO,"缓存命中");
-        // 如果缓存命中，返回缓存的数据
-        std::string mimeType = getMimeType(fileId + ".cache", mimeTypes);
-        res.set_content(cachedImageData, mimeType);
-        log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
-        return;
-    }
-    // 如果缓存未命中，则从Telegram下载图片
+    // 获取 Telegram 文件信息的 URL
     std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
     log(LogLevel::INFO,"Request url: " + telegramFileUrl);
     std::string fileResponse = sendHttpRequest(telegramFileUrl);
@@ -57,8 +55,19 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         nlohmann::json jsonResponse = nlohmann::json::parse(fileResponse);
         if (jsonResponse.contains("result") && jsonResponse["result"].contains("file_path")) {
             std::string filePath = jsonResponse["result"]["file_path"];
+            std::string extension = getFileExtension(filePath);
             std::string fileDownloadUrl = "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
             log(LogLevel::INFO,"File path obtained: " + filePath);
+
+            // 尝试从缓存中获取图片数据
+            std::string cachedImageData = cacheManager.getCachedImage(fileId, extension);
+            if (!cachedImageData.empty()) {
+                log(LogLevel::INFO,"缓存命中");
+                std::string mimeType = getMimeType(fileId + extension, mimeTypes);
+                res.set_content(cachedImageData, mimeType);
+                log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
+                return;
+            }
 
             std::string imageData = sendHttpRequest(fileDownloadUrl);
             if (imageData.empty()) {
@@ -68,8 +77,8 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
                 return;
             }
 
-            // 将图片数据缓存
-            cacheManager.cacheImage(fileId, imageData);
+            // 将图片数据缓存，并指定扩展名
+            cacheManager.cacheImage(fileId, imageData, extension);
 
             std::string mimeType = getMimeType(filePath, mimeTypes);
             log(LogLevel::INFO,"MIME type determined: " + mimeType);
