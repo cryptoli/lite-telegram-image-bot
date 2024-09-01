@@ -40,7 +40,7 @@ std::string sendHttpRequest(const std::string& url) {
 }
 
 // 构建 Telegram 发送消息的 URL 并对文本参数进行编码
-std::string buildTelegramUrl(const std::string& apiToken, const std::string& chatId, const std::string& text) {
+std::string buildTelegramUrl(const std::string& text) {
     CURL* curl = curl_easy_init();
     std::string encoded_text;
 
@@ -58,8 +58,7 @@ std::string buildTelegramUrl(const std::string& apiToken, const std::string& cha
         std::cerr << "Failed to initialize CURL for URL encoding." << std::endl;
     }
 
-    std::string url = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + encoded_text;
-    std::cout << "Built Telegram URL: " << url << std::endl;
+    std::cout << "Built Telegram URL: " << encoded_text << std::endl;
 
-    return url;
+    return encoded_text;
 }

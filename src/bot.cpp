@@ -35,7 +35,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
 }
 
 std::string Bot::getFileUrl(const std::string& fileId) {
-    std::string getFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
+    std::string getFileUrl = buildTelegramUrl("https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId);
     std::string fileResponse = sendHttpRequest(getFileUrl);
 
     if (fileResponse.empty()) {
