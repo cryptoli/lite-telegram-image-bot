@@ -10,7 +10,7 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
     if (it != mimeTypes.end()) {
         return it->second;
     } else {
-        return "application/octet-stream";
+        return "application/image-jpeg";
     }
 }
 
