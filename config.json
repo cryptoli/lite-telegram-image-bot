@@ -12,5 +12,9 @@
         ".bmp": "image/bmp",
         ".tiff": "image/tiff",
         ".webp": "image/webp"
+    },
+    "cache": {
+        "max_size_mb": 100,
+        "max_age_seconds": 3600
     }
 }

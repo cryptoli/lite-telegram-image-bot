@@ -31,3 +31,11 @@ std::map<std::string, std::string> Config::getMimeTypes() const {
     }
     return mimeTypes;
 }
+
+int Config::getCacheMaxSizeMB() const {
+    return configData["cache"]["max_size_mb"].get<int>();
+}
+
+int Config::getCacheMaxAgeSeconds() const {
+    return configData["cache"]["max_age_seconds"].get<int>();
+}

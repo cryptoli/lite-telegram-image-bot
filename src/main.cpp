@@ -29,14 +29,16 @@ int main(int argc, char* argv[]) {
     std::string hostname = config.getHostname();
     int port = config.getPort();
     auto mimeTypes = config.getMimeTypes();
+    int cacheMaxSizeMB = config.getCacheMaxSizeMB();
+    int cacheMaxAgeSeconds = config.getCacheMaxAgeSeconds();
 
     log("Starting server at " + hostname + ":" + std::to_string(port));
 
     // 初始化线程池
     ThreadPool pool(4);
 
-    // 创建 ImageCacheManager 实例
-    ImageCacheManager cacheManager("/path/to/cache", 100, 3600); // 最大100MB缓存，文件超过1小时未访问则删除
+    // 创建 ImageCacheManager 实例，使用配置文件中的参数
+    ImageCacheManager cacheManager("./cache", cacheMaxSizeMB, cacheMaxAgeSeconds);
 
     // 启动HTTP服务器
     httplib::Server svr;
@@ -44,7 +46,7 @@ int main(int argc, char* argv[]) {
     // 处理图片请求
     svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
         log("Received request for image.");
-        
+
         if (req.matches.size() < 2) {
             res.status = 400;
             res.set_content("Bad Request", "text/plain");
@@ -149,6 +151,15 @@ int main(int argc, char* argv[]) {
 
         for (const auto& update : updates["result"]) {
             int updateId = update["update_id"];
+            std::string userId = "Unknown";
+            std::string userName = "Unknown";
+
+            if (update.contains("message") && update["message"].contains("from")) {
+                userId = update["message"]["from"]["id"].get<std::string>();
+                userName = update["message"]["from"]["username"].get<std::string>();
+            }
+
+            log("Processing update from user ID: " + userId + ", Username: " + userName);
 
             pool.enqueue([&bot, update]() {
                 bot.processUpdate(update);

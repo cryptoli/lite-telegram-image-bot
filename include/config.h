@@ -12,10 +12,11 @@ public:
     int getPort() const;
     std::string getApiToken() const;
     std::map<std::string, std::string> getMimeTypes() const;
+    int getCacheMaxSizeMB() const;
+    int getCacheMaxAgeSeconds() const;
 
 private:
     nlohmann::json configData;
 };
 
 #endif
-

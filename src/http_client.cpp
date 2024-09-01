@@ -21,8 +21,6 @@ std::string sendHttpRequest(const std::string& url) {
 
     curl = curl_easy_init();
     if (curl) {
-        std::cout << "Sending request to URL: " << url << std::endl;
-
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
