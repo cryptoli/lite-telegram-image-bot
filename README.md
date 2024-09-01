@@ -59,13 +59,33 @@ sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev
 ```bash
 make
 ```
+### 4. 修改配置文件config.json
 
-### 4. 运行机器人
+```bash
+{
+    "server": {
+        "hostname": "yourdomain.com", #修改为你自己的域名或者ip
+        "port": 8080 #修改为你自己的端口
+    },
+    "api_token": "your_telegram_api_token_here", # 修改为你自己的机器人token
+    "mime_types": {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".tiff": "image/tiff",
+        ".webp": "image/webp"
+    }
+}
+```
+
+### 5. 运行机器人
 
 运行程序并传入 Telegram Bot API Token：
 
 ```bash
-./telegram_bot <Your_Telegram_Bot_Token>
+./telegram_bot
 ```
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
