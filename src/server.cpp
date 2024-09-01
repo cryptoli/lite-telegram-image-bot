@@ -1,6 +1,6 @@
 #include "server.h"
 #include "request_handler.h"
-#include "logger.h"
+#include "utils.h"
 
 void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool) {
     std::string apiToken = config.getApiToken();
