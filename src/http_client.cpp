@@ -25,13 +25,16 @@ std::string sendHttpRequest(const std::string& url) {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // 自动处理重定向
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 设置超时时间
+
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            log(LogLevel::ERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)));
+            log(LogLevel::ERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)) + " URL: " + url);
         }
         curl_easy_cleanup(curl);
     } else {
-        std::cerr << "Failed to initialize CURL." << std::endl;
+        log(LogLevel::ERROR, "Failed to initialize CURL.");
     }
     return response;
 }
@@ -48,14 +51,14 @@ std::string buildTelegramUrl(const std::string& text) {
             encoded_text = encoded;
             curl_free(encoded);
         } else {
-            std::cerr << "Error encoding text: " << text << std::endl;
+            log(LogLevel::ERROR, "Error encoding text: " + text);
         }
         curl_easy_cleanup(curl);
     } else {
-        std::cerr << "Failed to initialize CURL for URL encoding." << std::endl;
+        log(LogLevel::ERROR, "Failed to initialize CURL for URL encoding.");
     }
 
-    std::cout << "Built Telegram URL: " << encoded_text << std::endl;
+    log(LogLevel::INFO, "Built Telegram URL: " + encoded_text);
 
     return encoded_text;
 }
