@@ -11,6 +11,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     httplib::Server svr;
 
     svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
+        log(LogLevel::INFO,"收到请求...");
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
