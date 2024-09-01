@@ -42,6 +42,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (!cachedImageData.empty()) {
         // 如果缓存命中，返回缓存的数据
         std::string mimeType = getMimeType(fileId, mimeTypes);
+        log(LogLevel::INFO, "cache mimeType:" + mimeType);
         res.set_content(cachedImageData, mimeType);
         log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
         return;
