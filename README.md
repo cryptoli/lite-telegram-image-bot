@@ -65,7 +65,7 @@ make
 {
     "server": {
         "hostname": "yourdomain.com",
-        "port": 443
+        "port": 8080
     },
     "api_token": "your_telegram_api_token_here",
     "mime_types": {
@@ -75,7 +75,41 @@ make
         ".gif": "image/gif",
         ".bmp": "image/bmp",
         ".tiff": "image/tiff",
-        ".webp": "image/webp"
+        ".webp": "image/webp",
+        ".mp4": "video/mp4",
+        ".mp3": "audio/mpeg",
+        ".ogg": "audio/ogg",
+        ".wav": "audio/wav",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+        ".pdf": "application/pdf",
+        ".doc": "application/msword",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xls": "application/vnd.ms-excel",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".zip": "application/zip",
+        ".rar": "application/x-rar-compressed",
+        ".7z": "application/x-7z-compressed",
+        ".txt": "text/plain",
+        ".csv": "text/csv",
+        ".json": "application/json",
+        ".xml": "application/xml",
+        ".html": "text/html",
+        ".htm": "text/html",
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".webm": "video/webm",
+        ".mkv": "video/x-matroska",
+        ".mov": "video/quicktime",
+        ".avi": "video/x-msvideo",
+        ".flv": "video/x-flv",
+        ".apk": "application/vnd.android.package-archive",
+        ".tar": "application/x-tar",
+        ".gz": "application/gzip",
+        ".bz2": "application/x-bzip2",
+        ".stl": "application/vnd.ms-pkistl"
     },
     "cache": {
         "max_size_mb": 100,

@@ -18,7 +18,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("photo")) {
                 std::string fileId = message["photo"].back()["file_id"];
                 std::string customUrl = baseUrl + "/images/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("图片URL如下: " + customUrl));
+                std::string formattedMessage = "🖼️ **图片 URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent image URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -26,7 +27,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("document")) {
                 std::string fileId = message["document"]["file_id"];
                 std::string customUrl = baseUrl + "/files/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("文件URL如下: " + customUrl));
+                std::string formattedMessage = "📄 **文件 URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent document URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -34,7 +36,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("video")) {
                 std::string fileId = message["video"]["file_id"];
                 std::string customUrl = baseUrl + "/videos/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("视频URL如下: " + customUrl));
+                std::string formattedMessage = "🎥 **视频 URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent video URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -42,7 +45,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("audio")) {
                 std::string fileId = message["audio"]["file_id"];
                 std::string customUrl = baseUrl + "/audios/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("音频URL如下: " + customUrl));
+                std::string formattedMessage = "🎵 **音频 URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent audio URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -50,7 +54,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("animation")) {
                 std::string fileId = message["animation"]["file_id"];
                 std::string customUrl = baseUrl + "/gifs/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("GIF URL如下: " + customUrl));
+                std::string formattedMessage = "🎬 **GIF URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent GIF URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -58,7 +63,8 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("sticker")) {
                 std::string fileId = message["sticker"]["file_id"];
                 std::string customUrl = baseUrl + "/stickers/" + fileId;
-                sendMessage(chatId, buildTelegramUrl("贴纸URL如下: " + customUrl));
+                std::string formattedMessage = "📝 **贴纸 URL**:\n[" + customUrl + "](" + customUrl + ")";
+                sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent sticker URL: " + customUrl + " to chat ID: " + chatId);
             }
 
@@ -102,7 +108,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
 }
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
-    std::string sendMessageUrl = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + message;
+    std::string sendMessageUrl = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + message + "&parse_mode=MarkdownV2";
     sendHttpRequest(sendMessageUrl);
 }
 
