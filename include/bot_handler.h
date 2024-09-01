@@ -5,6 +5,6 @@
 #include "bot.h"
 #include "thread_pool.h"
 
-void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset);
+void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::string& apiToken);
 
 #endif

@@ -4,9 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <iostream>
 
-void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset) {
-    std::string apiToken = bot.getApiToken();
-
+void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::string& apiToken) {
     while (true) {
         std::string updatesUrl = "https://api.telegram.org/bot" + apiToken + "/getUpdates?offset=" + std::to_string(lastOffset + 1);
         std::string updatesResponse = sendHttpRequest(updatesUrl);
