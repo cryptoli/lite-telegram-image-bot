@@ -43,7 +43,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     std::string cachedImageData = cacheManager.getCachedImage(fileId);
     if (!cachedImageData.empty()) {
         // 如果缓存命中，返回缓存的数据
-        log(LogLevel::INFO, " before cache mimeType:" + mimeType);
+        log(LogLevel::INFO, " before cache mimeType");
         std::string mimeType = getMimeType(fileId, mimeTypes);
         log(LogLevel::INFO, "cache mimeType:" + mimeType);
         res.set_content(cachedImageData, mimeType);
