@@ -46,7 +46,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
         return;
     }
-
+    log(LogLevel::INFO,"未命中缓存");
     // 如果缓存未命中，则从Telegram下载图片
     std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
     log(LogLevel::INFO,"Request url: " + telegramFileUrl);
