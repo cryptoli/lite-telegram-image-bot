@@ -1,6 +1,7 @@
 #include "server.h"
 #include "request_handler.h"
 #include "utils.h"
+#include <httplib.h>
 
 void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool) {
     std::string apiToken = config.getApiToken();
@@ -10,8 +11,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
 
     httplib::Server svr;
 
-    svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        log(LogLevel::INFO,"收到请求...");
+    svr.Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
