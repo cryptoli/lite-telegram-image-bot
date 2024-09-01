@@ -12,9 +12,10 @@ void Bot::processUpdate(const nlohmann::json& update) {
             const auto& message = update["message"];
             if (message.contains("photo")) {
                 std::string fileId = message["photo"].back()["file_id"];
-                std::string fileUrl = getFileUrl(fileId);
-                std::string chatId = std::to_string(message["chat"]["id"]);
+                
+                std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
 
+                std::string fileUrl = getFileUrl(fileId);
                 if (!fileUrl.empty()) {
                     sendMessage(chatId, "Here is your image URL: " + fileUrl);
                 } else {
