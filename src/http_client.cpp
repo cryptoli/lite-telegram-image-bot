@@ -1,6 +1,7 @@
 #include "http_client.h"
 #include <curl/curl.h>
 #include <iostream>
+#include "utils.h"
 
 // 回调函数，用于处理 CURL 响应数据
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) {
