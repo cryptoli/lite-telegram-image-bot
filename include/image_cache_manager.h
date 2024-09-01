@@ -4,17 +4,17 @@
 #include <string>
 #include <unordered_map>
 #include <chrono>
-#include <filesystem>
+#include <boost/filesystem.hpp>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <algorithm>
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 class ImageCacheManager {
 public:
-    // 构造函数：初始化缓存目录、最大磁盘使用量和缓存文件的最大存活时间
     ImageCacheManager(const std::string& cacheDir, size_t maxDiskUsageMB, int maxCacheAgeSeconds)
         : cacheDir(cacheDir), maxDiskUsageBytes(maxDiskUsageMB * 1024 * 1024), maxCacheAgeSeconds(maxCacheAgeSeconds) {
         if (!fs::exists(cacheDir)) {
@@ -30,12 +30,11 @@ public:
         }
     }
 
-    // 缓存图片
     void cacheImage(const std::string& fileId, const std::string& imageData) {
         std::lock_guard<std::mutex> lock(cacheMutex);
         std::string filePath = getCacheFilePath(fileId);
 
-        std::ofstream file(filePath, std::ios::binary);
+        std::ofstream file(filePath.c_str(), std::ios::binary);
         if (file.is_open()) {
             file.write(imageData.c_str(), imageData.size());
             file.close();
@@ -44,7 +43,6 @@ public:
         }
     }
 
-    // 获取缓存的图片
     std::string getCachedImage(const std::string& fileId) {
         std::lock_guard<std::mutex> lock(cacheMutex);
         std::string filePath = getCacheFilePath(fileId);
@@ -52,7 +50,7 @@ public:
         if (fs::exists(filePath)) {
             lastAccessTimes[fileId] = std::chrono::system_clock::now();
 
-            std::ifstream file(filePath, std::ios::binary);
+            std::ifstream file(filePath.c_str(), std::ios::binary);
             std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             return imageData;
         }
@@ -69,23 +67,20 @@ private:
     std::thread cleanerThread;
     bool stopCleaner = false;
 
-    // 获取缓存文件的路径
     std::string getCacheFilePath(const std::string& fileId) const {
         return cacheDir + "/" + fileId + ".cache";
     }
 
-    // 获取缓存的总大小
     size_t getCacheSize() const {
         size_t totalSize = 0;
-        for (const auto& entry : fs::directory_iterator(cacheDir)) {
-            if (fs::is_regular_file(entry.status())) {
-                totalSize += fs::file_size(entry.path());
+        for (fs::directory_iterator itr(cacheDir); itr != fs::directory_iterator(); ++itr) {
+            if (fs::is_regular_file(itr->status())) {
+                totalSize += fs::file_size(itr->path());
             }
         }
         return totalSize;
     }
 
-    // 清理旧文件的线程
     void cleanUpOldFiles() {
         while (!stopCleaner) {
             std::this_thread::sleep_for(std::chrono::seconds(60)); // 每60秒检查一次
@@ -117,7 +112,8 @@ private:
             // 检查磁盘使用情况并清理缓存
             while (currentCacheSize > maxDiskUsageBytes) {
                 auto oldest = std::min_element(lastAccessTimes.begin(), lastAccessTimes.end(),
-                    [](const auto& lhs, const auto& rhs) {
+                    [](const std::pair<const std::string, std::chrono::system_clock::time_point>& lhs,
+                       const std::pair<const std::string, std::chrono::system_clock::time_point>& rhs) {
                         return lhs.second < rhs.second;
                     });
 
@@ -137,4 +133,4 @@ private:
     }
 };
 
-#endif // IMAGE_CACHE_MANAGER_H
+#endif 
