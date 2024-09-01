@@ -37,25 +37,39 @@ int main(int argc, char* argv[]) {
 
     // 处理图片请求
     svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes](const httplib::Request& req, httplib::Response& res) {
+        log("Received request for image.");
+        
         if (req.matches.size() < 2) {
             res.status = 400;
             res.set_content("Bad Request", "text/plain");
-            log("Bad request received.");
+            log("Bad request: URL does not match expected format.");
             return;
         }
 
         std::string fileId = req.matches[1];
+        log("Requesting file ID: " + fileId);
+
         std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
         std::string fileResponse = sendHttpRequest(telegramFileUrl);
+        log("Received response from Telegram for file ID: " + fileId);
 
         try {
             nlohmann::json jsonResponse = nlohmann::json::parse(fileResponse);
             if (jsonResponse.contains("result") && jsonResponse["result"].contains("file_path")) {
                 std::string filePath = jsonResponse["result"]["file_path"];
                 std::string fileDownloadUrl = "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
+                log("File path obtained: " + filePath);
 
                 std::string imageData = sendHttpRequest(fileDownloadUrl);
+                if (imageData.empty()) {
+                    log("Failed to download image from Telegram.");
+                    res.status = 500;
+                    res.set_content("Failed to download image", "text/plain");
+                    return;
+                }
+
                 std::string mimeType = getMimeType(filePath, mimeTypes);
+                log("MIME type determined: " + mimeType);
 
                 // 返回图片数据
                 res.set_content(imageData, mimeType);
@@ -63,12 +77,12 @@ int main(int argc, char* argv[]) {
             } else {
                 res.status = 404;
                 res.set_content("File Not Found", "text/plain");
-                log("File not found for ID: " + fileId);
+                log("File not found in Telegram for ID: " + fileId);
             }
         } catch (const std::exception& e) {
             res.status = 500;
             res.set_content("Internal Server Error", "text/plain");
-            log("Error processing request for file ID: " + fileId + " - " + e.what());
+            log("Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
         }
     });
 
