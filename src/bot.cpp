@@ -1,7 +1,5 @@
 #include "bot.h"
-#include "http_client.h"
 #include "utils.h"
-#include <iostream>
 #include <fstream>
 
 Bot::Bot(const std::string& token) : apiToken(token) {}
@@ -13,17 +11,15 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("photo")) {
                 std::string fileId = message["photo"].back()["file_id"];
                 
+                // 生成自定义链接
+                Config config("config.json");
+                std::string customUrl = "http://" + config.getHostname() + ":" + std::to_string(config.getPort()) + "/images/" + fileId;
                 std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
 
-                std::string fileUrl = getFileUrl(fileId);
-                if (!fileUrl.empty()) {
-                    sendMessage(chatId, "Here is your image URL: " + fileUrl);
-                } else {
-                    sendMessage(chatId, "Sorry, I couldn't retrieve the image. Please try again.");
-                }
+                sendMessage(chatId, "Here is your image URL: " + customUrl);
+                log("Sent image URL: " + customUrl + " to chat ID: " + chatId);
             }
 
-            // 群聊中@机器人的情况
             if (message.contains("reply_to_message") && message.contains("text")) {
                 std::string text = message["text"];
                 if (text.find("@YourBotUsername") != std::string::npos) {
@@ -32,7 +28,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             }
         }
     } catch (std::exception& e) {
-        std::cerr << "Error processing update: " << e.what() << std::endl;
+        log("Error processing update: " + std::string(e.what()));
     }
 }
 
@@ -41,6 +37,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
     std::string fileResponse = sendHttpRequest(getFileUrl);
 
     if (fileResponse.empty()) {
+        log("Error retrieving file URL for file ID: " + fileId);
         return {};
     }
 
@@ -48,7 +45,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
     try {
         jsonResponse = nlohmann::json::parse(fileResponse);
     } catch (nlohmann::json::parse_error& e) {
-        std::cerr << "JSON parse error: " << e.what() << std::endl;
+        log("JSON parse error: " + std::string(e.what()));
         return {};
     }
 
@@ -56,7 +53,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
         std::string filePath = jsonResponse["result"]["file_path"];
         return "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
     } else {
-        std::cerr << "Failed to retrieve file path from Telegram API response." << std::endl;
+        log("Failed to retrieve file path from Telegram API response.");
         return {};
     }
 }
@@ -76,7 +73,7 @@ void Bot::saveOffset(int offset) {
         offsetFile << offset;
         offsetFile.close();
     } else {
-        std::cerr << "Unable to save offset to file." << std::endl;
+        log("Unable to save offset to file.");
     }
 }
 
