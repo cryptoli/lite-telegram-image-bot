@@ -37,7 +37,10 @@ int main(int argc, char* argv[]) {
 
         for (const auto& update : updates["result"]) {
             int updateId = update["update_id"];
-            pool.enqueue(&Bot::processUpdate, &bot, update);
+
+            // 显式传递类成员函数指针和参数类型
+            pool.enqueue(&Bot::processUpdate, &bot, std::cref(update));
+
             lastOffset = updateId;
             bot.saveOffset(lastOffset);
         }
