@@ -3,10 +3,13 @@
 #include "thread_pool.h"
 #include "config.h"
 #include "utils.h"
+#include "image_cache_manager.h"
 #include <chrono>
 #include <iostream>
 #include <httplib.h>
 #include <map>
+#include <filesystem>
+#include <regex>
 
 // 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes) {
@@ -32,11 +35,14 @@ int main(int argc, char* argv[]) {
     // 初始化线程池
     ThreadPool pool(4);
 
+    // 创建 ImageCacheManager 实例
+    ImageCacheManager cacheManager("/path/to/cache", 100, 3600); // 最大100MB缓存，文件超过1小时未访问则删除
+
     // 启动HTTP服务器
     httplib::Server svr;
 
     // 处理图片请求
-    svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes](const httplib::Request& req, httplib::Response& res) {
+    svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
         log("Received request for image.");
         
         if (req.matches.size() < 2) {
@@ -47,8 +53,29 @@ int main(int argc, char* argv[]) {
         }
 
         std::string fileId = req.matches[1];
+
+        // 验证fileId的合法性
+        std::regex fileIdRegex("^[A-Za-z0-9_-]+$");
+        if (!std::regex_match(fileId, fileIdRegex)) {
+            res.status = 400;
+            res.set_content("Invalid File ID", "text/plain");
+            log("Invalid file ID received: " + fileId);
+            return;
+        }
+
         log("Requesting file ID: " + fileId);
 
+        // 尝试从缓存中获取图片数据
+        std::string cachedImageData = cacheManager.getCachedImage(fileId);
+        if (!cachedImageData.empty()) {
+            // 如果缓存命中，返回缓存的数据
+            std::string mimeType = getMimeType(fileId, mimeTypes);
+            res.set_content(cachedImageData, mimeType);
+            log("Cache hit: Served image for file ID: " + fileId + " from cache.");
+            return;
+        }
+
+        // 如果缓存未命中，则从Telegram下载图片
         std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
         std::string fileResponse = sendHttpRequest(telegramFileUrl);
         log("Received response from Telegram for file ID: " + fileId);
@@ -67,6 +94,9 @@ int main(int argc, char* argv[]) {
                     res.set_content("Failed to download image", "text/plain");
                     return;
                 }
+
+                // 将图片数据缓存
+                cacheManager.cacheImage(fileId, imageData);
 
                 std::string mimeType = getMimeType(filePath, mimeTypes);
                 log("MIME type determined: " + mimeType);
