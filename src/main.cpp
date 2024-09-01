@@ -24,7 +24,11 @@ int main(int argc, char* argv[]) {
     // 处理来自 Telegram API 的更新
     Bot bot(apiToken);
     int lastOffset = bot.getSavedOffset();
-    processBotUpdates(bot, pool, lastOffset, apiToken);
+
+    // 保持持续获取并处理更新的循环
+    while (true) {
+        processBotUpdates(bot, pool, lastOffset, apiToken);
+    }
 
     return 0;
 }
