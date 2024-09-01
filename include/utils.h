@@ -3,7 +3,14 @@
 
 #include <string>
 
+enum class LogLevel {
+    INFO,
+    WARNING,
+    ERROR
+};
+
 bool isValidUrl(const std::string& url);
-void log(const std::string& message);
+void log(LogLevel level, const std::string& message);
 
 #endif
+

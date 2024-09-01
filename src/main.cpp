@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
     Config config("config.json");
     std::string apiToken = config.getApiToken();
 
-    log("Starting application...");
+    log(LogLevel::INFO,"Starting application...");
 
     // 初始化线程池
     ThreadPool pool(4);

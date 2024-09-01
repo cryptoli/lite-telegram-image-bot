@@ -19,7 +19,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
 
                 sendMessage(chatId, buildTelegramUrl("图片URL如下: " + customUrl));
-                log("Sent image URL: " + customUrl + " to chat ID: " + chatId);
+                log(LogLevel::INFO,"Sent image URL: " + customUrl + " to chat ID: " + chatId);
             }
 
             if (message.contains("reply_to_message") && message.contains("text")) {
@@ -30,7 +30,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             }
         }
     } catch (std::exception& e) {
-        log("Error processing update: " + std::string(e.what()));
+        log(LogLevel::INFO,"Error processing update: " + std::string(e.what()));
     }
 }
 
@@ -39,7 +39,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
     std::string fileResponse = sendHttpRequest(getFileUrl);
 
     if (fileResponse.empty()) {
-        log("Error retrieving file URL for file ID: " + fileId);
+        log(LogLevel::INFO,"Error retrieving file URL for file ID: " + fileId);
         return {};
     }
 
@@ -47,7 +47,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
     try {
         jsonResponse = nlohmann::json::parse(fileResponse);
     } catch (nlohmann::json::parse_error& e) {
-        log("JSON parse error: " + std::string(e.what()));
+        log(LogLevel::INFO,"JSON parse error: " + std::string(e.what()));
         return {};
     }
 
@@ -55,7 +55,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
         std::string filePath = jsonResponse["result"]["file_path"];
         return "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
     } else {
-        log("Failed to retrieve file path from Telegram API response.");
+        log(LogLevel::INFO,"Failed to retrieve file path from Telegram API response.");
         return {};
     }
 }
@@ -75,7 +75,7 @@ void Bot::saveOffset(int offset) {
         offsetFile << offset;
         offsetFile.close();
     } else {
-        log("Unable to save offset to file.");
+        log(LogLevel::INFO,"Unable to save offset to file.");
     }
 }
 

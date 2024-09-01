@@ -6,12 +6,11 @@
 
 void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::string& apiToken) {
     while (true) {
-        log("process Bot Updates...");
         std::string updatesUrl = "https://api.telegram.org/bot" + apiToken + "/getUpdates?offset=" + std::to_string(lastOffset + 1);
         std::string updatesResponse = sendHttpRequest(updatesUrl);
 
         if (updatesResponse.empty()) {
-            log("Failed to get updates from Telegram API.");
+            log(LogLevel::INFO,"Failed to get updates from Telegram API.");
             std::this_thread::sleep_for(std::chrono::seconds(2));
             continue;
         }
@@ -20,7 +19,7 @@ void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::s
         try {
             updates = nlohmann::json::parse(updatesResponse);
         } catch (nlohmann::json::parse_error& e) {
-            log("JSON parse error: " + std::string(e.what()));
+            log(LogLevel::INFO,"JSON parse error: " + std::string(e.what()));
             std::this_thread::sleep_for(std::chrono::seconds(2));
             continue;
         }
@@ -35,7 +34,7 @@ void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::s
                 userName = update["message"]["from"].value("username", "Unknown");
             }
 
-            log("Processing update from user ID: " + userId + ", Username: " + userName);
+            log(LogLevel::INFO,"Processing update from user ID: " + userId + ", Username: " + userName);
 
             pool.enqueue([&bot, update]() {
                 bot.processUpdate(update);
@@ -43,7 +42,7 @@ void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::s
 
             lastOffset = updateId;
             bot.saveOffset(lastOffset);
-            log("Processed update ID: " + std::to_string(updateId));
+            log(LogLevel::INFO,"Processed update ID: " + std::to_string(updateId));
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 延时避免频繁请求
