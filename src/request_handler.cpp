@@ -40,6 +40,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     // 尝试从缓存中获取图片数据
     std::string cachedImageData = cacheManager.getCachedImage(fileId);
     if (!cachedImageData.empty()) {
+        log(LogLevel::INFO,"缓存命中");
         // 如果缓存命中，返回缓存的数据
         std::string mimeType = getMimeType(fileId + ".cache", mimeTypes);
         res.set_content(cachedImageData, mimeType);
