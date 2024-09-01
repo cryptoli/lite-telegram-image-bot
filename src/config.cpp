@@ -20,6 +20,10 @@ int Config::getPort() const {
     return configData["server"]["port"].get<int>();
 }
 
+std::string Config::getApiToken() const {
+    return configData["api_token"].get<std::string>();
+}
+
 std::map<std::string, std::string> Config::getMimeTypes() const {
     std::map<std::string, std::string> mimeTypes;
     for (auto& item : configData["mime_types"].items()) {

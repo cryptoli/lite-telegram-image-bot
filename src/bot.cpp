@@ -1,6 +1,6 @@
 #include "bot.h"
-#include "config.h"          // 包含配置类的头文件
-#include "http_client.h"     // 包含发送HTTP请求的头文件
+#include "config.h"
+#include "http_client.h"
 #include "utils.h"
 #include <fstream>
 

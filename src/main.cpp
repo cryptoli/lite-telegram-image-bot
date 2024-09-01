@@ -8,6 +8,7 @@
 #include <httplib.h>
 #include <map>
 
+// 定义 getMimeType 函数
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes) {
     std::string extension = filePath.substr(filePath.find_last_of("."));
     auto it = mimeTypes.find(extension);
@@ -19,17 +20,14 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <Telegram API Token>" << std::endl;
-        return 1;
-    }
-
-    std::string apiToken = argv[1];
+    // 从配置文件中读取 API Token
+    Config config("config.json");
+    std::string apiToken = config.getApiToken();
+    
     Bot bot(apiToken);
     ThreadPool pool(4);
 
     try {
-        Config config("config.json");
         std::string hostname = config.getHostname();
         int port = config.getPort();
         auto mimeTypes = config.getMimeTypes();

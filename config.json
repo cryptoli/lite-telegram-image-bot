@@ -3,6 +3,7 @@
         "hostname": "yourdomain.com",
         "port": 8080
     },
+    "api_token": "your_telegram_api_token_here",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",

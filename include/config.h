@@ -10,6 +10,7 @@ public:
     Config(const std::string& filePath);
     std::string getHostname() const;
     int getPort() const;
+    std::string getApiToken() const;
     std::map<std::string, std::string> getMimeTypes() const;
 
 private:
@@ -17,3 +18,4 @@ private:
 };
 
 #endif
+
