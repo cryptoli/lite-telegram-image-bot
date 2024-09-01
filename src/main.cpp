@@ -1,4 +1,5 @@
 #include "bot.h"
+#include "http_client.h"
 #include "thread_pool.h"
 #include <chrono>
 #include <iostream>

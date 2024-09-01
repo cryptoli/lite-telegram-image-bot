@@ -7,15 +7,17 @@
 class Bot {
 public:
     Bot(const std::string& token);
+
     void processUpdate(const nlohmann::json& update);
     std::string getFileUrl(const std::string& fileId);
     void sendMessage(const std::string& chatId, const std::string& message);
 
+    int getSavedOffset();
+    void saveOffset(int offset);
+
 private:
     std::string apiToken;
     std::string getOffsetFile();
-    void saveOffset(int offset);
-    int getSavedOffset();
 };
 
 #endif
