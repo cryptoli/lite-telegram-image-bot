@@ -29,4 +29,6 @@ private:
     size_t maxThreads;
 };
 
+#include "thread_pool.tpp"
+
 #endif
