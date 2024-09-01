@@ -8,6 +8,7 @@
 #include <httplib.h>
 #include <map>
 
+// 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes) {
     std::string extension = filePath.substr(filePath.find_last_of("."));
     auto it = mimeTypes.find(extension);
@@ -19,6 +20,7 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
 }
 
 int main(int argc, char* argv[]) {
+    // 加载配置文件
     Config config("config.json");
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
@@ -27,11 +29,13 @@ int main(int argc, char* argv[]) {
 
     log("Starting server at " + hostname + ":" + std::to_string(port));
 
-    ThreadPool pool(4); // 使用4个线程初始化线程池
+    // 初始化线程池
+    ThreadPool pool(4);
 
     // 启动HTTP服务器
     httplib::Server svr;
 
+    // 处理图片请求
     svr.Get(R"(/images/(\w+))", [&apiToken, &mimeTypes](const httplib::Request& req, httplib::Response& res) {
         if (req.matches.size() < 2) {
             res.status = 400;
@@ -68,7 +72,7 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    // 线程池来处理服务器的启动和监听
+    // 线程池处理服务器的启动和监听
     std::future<void> serverFuture = pool.enqueue([&svr, hostname, port]() {
         log("Server thread running on port: " + std::to_string(port));
         if (!svr.listen(hostname.c_str(), port)) {

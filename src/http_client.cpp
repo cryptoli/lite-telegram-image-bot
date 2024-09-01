@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <iostream>
 
+// 用于处理 CURL 回调，将响应内容写入字符串
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) {
     size_t newLength = size * nmemb;
     try {
@@ -12,6 +13,7 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s) 
     return newLength;
 }
 
+// 发送 HTTP 请求并返回响应
 std::string sendHttpRequest(const std::string& url) {
     CURL* curl;
     CURLcode res;
@@ -37,6 +39,7 @@ std::string sendHttpRequest(const std::string& url) {
     return response;
 }
 
+// 构建 Telegram 发送消息的 URL 并对文本参数进行编码
 std::string buildTelegramUrl(const std::string& apiToken, const std::string& chatId, const std::string& text) {
     CURL* curl = curl_easy_init();
     std::string encoded_text;
