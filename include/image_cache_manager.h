@@ -46,41 +46,40 @@ public:
     }
 
     void cacheImage(const std::string& fileId, const std::string& imageData) {
-        std::lock_guard<std::mutex> lock(cacheMutex);
-        std::string filePath = getCacheFilePath(fileId);
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    std::string filePath = getCacheFilePath(fileId);
 
-        std::ofstream file(filePath.c_str(), std::ios::binary);
-        if (file.is_open()) {
-            file.write(imageData.c_str(), imageData.size());
-            file.close();
-            lastAccessTimes[fileId] = std::chrono::system_clock::now();
-            log(LogLevel::INFO, "Cached image: " + fileId + " at " + filePath);
-        } else {
-            log(LogLevel::ERROR, "Failed to open file for caching: " + filePath);
-        }
+    std::ofstream file(filePath.c_str(), std::ios::binary);  // 确保以二进制模式写入
+    if (file.is_open()) {
+        file.write(imageData.c_str(), imageData.size());
+        file.close();
+        lastAccessTimes[fileId] = std::chrono::system_clock::now();
+        log(LogLevel::INFO, "Cached image: " + fileId + " at " + filePath);
+    } else {
+        log(LogLevel::ERROR, "Failed to open file for caching: " + filePath);
     }
+}
 
     std::string getCachedImage(const std::string& fileId) {
-        std::lock_guard<std::mutex> lock(cacheMutex);
-        std::string filePath = getCacheFilePath(fileId);
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    std::string filePath = getCacheFilePath(fileId);
 
-        if (fileExists(filePath)) {
+    if (fileExists(filePath)) {
+        std::ifstream file(filePath.c_str(), std::ios::binary);  // 确保以二进制模式读取
+        if (file.is_open()) {
+            std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             lastAccessTimes[fileId] = std::chrono::system_clock::now();
-
-            std::ifstream file(filePath.c_str(), std::ios::binary);
-            if (file.is_open()) {
-                std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-                log(LogLevel::INFO, "Cache hit: " + fileId + " from " + filePath);
-                return imageData;
-            } else {
-                log(LogLevel::ERROR, "Failed to open cached file: " + filePath);
-            }
+            log(LogLevel::INFO, "Cache hit: " + fileId + " from " + filePath);
+            return imageData;
         } else {
-            log(LogLevel::WARNING, "Cache miss for file ID: " + fileId);
+            log(LogLevel::ERROR, "Failed to open cached file: " + filePath);
         }
-
-        return ""; // Cache miss
+    } else {
+        log(LogLevel::WARNING, "Cache miss for file ID: " + fileId);
     }
+
+    return ""; // Cache miss
+}
 
 private:
     std::string cacheDir;
