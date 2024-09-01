@@ -85,8 +85,7 @@ int main(int argc, char* argv[]) {
     int lastOffset = bot.getSavedOffset();
 
     while (true) {
-        std::string text = "Here is your image URL: http://31.56.66.53:8080/images/AgACAgUAAxkBAAMNZtRerEH2ThZpZK1zXH9IdnyQcPMAAsq9MRvQ2nFWaIJp12abhdgBAAMCAAN5AAM1BA";
-        std::string updatesUrl = buildTelegramUrl(apiToken, "6301539691", text);
+        std::string updatesUrl = "https://api.telegram.org/bot" + apiToken + "/getUpdates?offset=" + std::to_string(lastOffset + 1);
         std::string updatesResponse = sendHttpRequest(updatesUrl);
 
         if (updatesResponse.empty()) {
