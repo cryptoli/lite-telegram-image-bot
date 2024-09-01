@@ -60,14 +60,14 @@ sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev
 make
 ```
 ### 4. 修改配置文件config.json
-
+需要修改hostname，api_token
 ```bash
 {
     "server": {
-        "hostname": "yourdomain.com", #修改为你自己的域名或者ip
-        "port": 8080 #修改为你自己的端口
+        "hostname": "yourdomain.com",
+        "port": 443
     },
-    "api_token": "your_telegram_api_token_here", # 修改为你自己的机器人token
+    "api_token": "your_telegram_api_token_here",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -76,6 +76,10 @@ make
         ".bmp": "image/bmp",
         ".tiff": "image/tiff",
         ".webp": "image/webp"
+    },
+    "cache": {
+        "max_size_mb": 100,
+        "max_age_seconds": 3600
     }
 }
 ```
