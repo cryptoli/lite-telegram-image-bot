@@ -83,9 +83,16 @@ make
     }
 }
 ```
-### 5. 在当前目录生成证书
+### 5. 生成证书
+证书放在项目根目录下，名称分别为server.key、server.crt
 ```bash
-openssl req -newkey rsa:2048 -nodes -keyout server.key -x509 -days 365 -out server.crt
+sudo apt-get update
+sudo apt-get install certbot
+sudo certbot certonly --standalone -d yourdomain.com
+
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem /path/to/your/project/server.key
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project/server.crt
+
 ```
 ### 6. 运行机器人
 
