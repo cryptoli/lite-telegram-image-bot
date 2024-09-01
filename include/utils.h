@@ -9,7 +9,6 @@ enum class LogLevel {
     ERROR
 };
 
-bool isValidUrl(const std::string& url);
 void log(LogLevel level, const std::string& message);
 
 #endif

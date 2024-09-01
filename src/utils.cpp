@@ -5,11 +5,6 @@
 #include <ctime>
 #include <sstream>
 
-bool isValidUrl(const std::string& url) {
-    const std::regex pattern(R"(^https?:\/\/[^\s/$.?#].[^\s]*$)");
-    return std::regex_match(url, pattern);
-}
-
 std::string logLevelToString(LogLevel level) {
     switch (level) {
         case LogLevel::INFO:
