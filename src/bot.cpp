@@ -30,7 +30,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             }
         }
     } catch (std::exception& e) {
-        log(LogLevel::INFO,"Error processing update: " + std::string(e.what()));
+        log(LogLevel::ERROR,"Error processing update: " + std::string(e.what()));
     }
 }
 
@@ -39,7 +39,7 @@ std::string Bot::getFileUrl(const std::string& fileId) {
     std::string fileResponse = sendHttpRequest(getFileUrl);
 
     if (fileResponse.empty()) {
-        log(LogLevel::INFO,"Error retrieving file URL for file ID: " + fileId);
+        log(LogLevel::ERROR,"Error retrieving file URL for file ID: " + fileId);
         return {};
     }
 

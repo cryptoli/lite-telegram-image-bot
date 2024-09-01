@@ -20,7 +20,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (req.matches.size() < 2) {
         res.status = 400;
         res.set_content("Bad Request", "text/plain");
-        log(LogLevel::INFO,"Bad request: URL does not match expected format.");
+        log(LogLevel::ERROR,"Bad request: URL does not match expected format.");
         return;
     }
 
@@ -31,7 +31,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (!std::regex_match(fileId, fileIdRegex)) {
         res.status = 400;
         res.set_content("Invalid File ID", "text/plain");
-        log(LogLevel::INFO,"Invalid file ID received: " + fileId);
+        log(LogLevel::ERROR,"Invalid file ID received: " + fileId);
         return;
     }
 
@@ -43,12 +43,13 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         // 如果缓存命中，返回缓存的数据
         std::string mimeType = getMimeType(fileId, mimeTypes);
         res.set_content(cachedImageData, mimeType);
-        log(LogLevel::INFO,"Cache hit: Served image for file ID: " + fileId + " from cache.");
+        log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
         return;
     }
 
     // 如果缓存未命中，则从Telegram下载图片
     std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
+    log(LogLevel::INFO,"Request url: " + telegramFileUrl);
     std::string fileResponse = sendHttpRequest(telegramFileUrl);
     log(LogLevel::INFO,"Received response from Telegram for file ID: " + fileId);
 
@@ -61,7 +62,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
             std::string imageData = sendHttpRequest(fileDownloadUrl);
             if (imageData.empty()) {
-                log(LogLevel::INFO,"Failed to download image from Telegram.");
+                log(LogLevel::ERROR,"Failed to download image from Telegram.");
                 res.status = 500;
                 res.set_content("Failed to download image", "text/plain");
                 return;
@@ -79,11 +80,11 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         } else {
             res.status = 404;
             res.set_content("File Not Found", "text/plain");
-            log(LogLevel::INFO,"File not found in Telegram for ID: " + fileId);
+            log(LogLevel::ERROR,"File not found in Telegram for ID: " + fileId);
         }
     } catch (const std::exception& e) {
         res.status = 500;
         res.set_content("Internal Server Error", "text/plain");
-        log(LogLevel::INFO,"Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
+        log(LogLevel::ERROR,"Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
     }
 }

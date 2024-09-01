@@ -17,7 +17,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     std::future<void> serverFuture = pool.enqueue([&svr, hostname, port]() {
         log(LogLevel::INFO,"Server thread running on port: " + std::to_string(port));
         if (!svr.listen(hostname.c_str(), port)) {
-            log(LogLevel::INFO,"Error: Server failed to start on port: " + std::to_string(port));
+            log(LogLevel::ERROR,"Error: Server failed to start on port: " + std::to_string(port));
         }
     });
 
