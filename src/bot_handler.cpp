@@ -6,6 +6,7 @@
 
 void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::string& apiToken) {
     while (true) {
+        log("process Bot Updates...");
         std::string updatesUrl = "https://api.telegram.org/bot" + apiToken + "/getUpdates?offset=" + std::to_string(lastOffset + 1);
         std::string updatesResponse = sendHttpRequest(updatesUrl);
 
