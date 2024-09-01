@@ -49,7 +49,7 @@ cd lite-telegram-image-bot
 在 Ubuntu 上，你可以使用以下命令安装所需的库：
 
 ```bash
-sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev
+sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev
 ```
 
 ### 3. 编译项目
@@ -79,8 +79,11 @@ make
     }
 }
 ```
-
-### 5. 运行机器人
+### 5. 在当前目录生成证书
+```bash
+openssl req -newkey rsa:2048 -nodes -keyout server.key -x509 -days 365 -out server.crt
+```
+### 6. 运行机器人
 
 运行程序并传入 Telegram Bot API Token：
 

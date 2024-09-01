@@ -9,7 +9,8 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     int port = config.getPort();
     auto mimeTypes = config.getMimeTypes();
 
-    httplib::Server svr;
+    // 使用 SSL 证书和密钥初始化 HTTPS 服务器
+    httplib::SSLServer svr("server.crt", "server.key");
 
     svr.Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
