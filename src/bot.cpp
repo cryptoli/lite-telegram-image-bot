@@ -15,7 +15,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 
                 // 生成自定义链接
                 Config config("config.json");
-                std::string customUrl = "http://" + config.getHostname() + ":" + std::to_string(config.getPort()) + "/images/" + fileId;
+                std::string customUrl = "https://" + config.getHostname() + ":" + std::to_string(config.getPort()) + "/images/" + fileId;
                 std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
 
                 sendMessage(chatId, buildTelegramUrl("图片URL如下: " + customUrl));
