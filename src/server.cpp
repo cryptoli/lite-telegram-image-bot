@@ -19,23 +19,23 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     });
 
     svr.Get(R"(/files/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleFileRequest(req, res, apiToken, mimeTypes, cacheManager);
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
     svr.Get(R"(/videos/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleVideoRequest(req, res, apiToken, mimeTypes, cacheManager);
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
     svr.Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleAudioRequest(req, res, apiToken, mimeTypes, cacheManager);
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
     svr.Get(R"(/gifs/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleGifRequest(req, res, apiToken, mimeTypes, cacheManager);
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
     svr.Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleStickerRequest(req, res, apiToken, mimeTypes, cacheManager);
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
     // 启动服务器
