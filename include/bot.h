@@ -11,7 +11,7 @@ public:
     void processUpdate(const nlohmann::json& update);
     std::string getFileUrl(const std::string& fileId);
     void sendMessage(const std::string& chatId, const std::string& message);
-
+    void handleWebhook(const nlohmann::json& webhookRequest);
     int getSavedOffset();
     void saveOffset(int offset);
 

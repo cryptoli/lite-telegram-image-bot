@@ -13,9 +13,9 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             Config config("config.json");
 
-            // åˆ¤æ–­ç«¯å£å·æ˜¯å¦ä¸º80æˆ–443ï¼Œå¦‚æœæ˜¯åˆ™ä¸æ·»åŠ ç«¯å£å·
+            std::string baseUrl = config.getUseHttps() ? "https://" : "http://";  // æ ¹æ® use_https é€‰æ‹©åè®®
+            baseUrl += config.getHostname();
             int port = config.getPort();
-            std::string baseUrl = "https://" + config.getHostname();
             if (port != 80 && port != 443) {
                 baseUrl += ":" + std::to_string(port);
             }
@@ -24,7 +24,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("photo")) {
                 std::string fileId = message["photo"].back()["file_id"];
                 std::string customUrl = baseUrl + "/images/" + fileId;
-                std::string formattedMessage = "ğŸ–¼ï¸ **å›¾ç‰‡ URL**:\n" + customUrl;
+                std::string formattedMessage = "í ½í¶¼ï¸ **å›¾ç‰‡ URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent image URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -33,7 +33,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("document")) {
                 std::string fileId = message["document"]["file_id"];
                 std::string customUrl = baseUrl + "/files/" + fileId;
-                std::string formattedMessage = "ğŸ“„ **æ–‡ä»¶ URL**:\n" + customUrl;
+                std::string formattedMessage = "í ½í³„ **æ–‡ä»¶ URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent document URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -42,7 +42,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("video")) {
                 std::string fileId = message["video"]["file_id"];
                 std::string customUrl = baseUrl + "/videos/" + fileId;
-                std::string formattedMessage = "ğŸ¥ **è§†é¢‘ URL**:\n" + customUrl;
+                std::string formattedMessage = "í ¼í¾¥ **è§†é¢‘ URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent video URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -51,7 +51,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("audio")) {
                 std::string fileId = message["audio"]["file_id"];
                 std::string customUrl = baseUrl + "/audios/" + fileId;
-                std::string formattedMessage = "ğŸµ **éŸ³é¢‘ URL**:\n" + customUrl;
+                std::string formattedMessage = "í ¼í¾µ **éŸ³é¢‘ URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent audio URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -60,7 +60,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("animation")) {
                 std::string fileId = message["animation"]["file_id"];
                 std::string customUrl = baseUrl + "/gifs/" + fileId;
-                std::string formattedMessage = "ğŸ¬ **GIF URL**:\n" + customUrl;
+                std::string formattedMessage = "í ¼í¾¬ **GIF URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent GIF URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -69,7 +69,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("sticker")) {
                 std::string fileId = message["sticker"]["file_id"];
                 std::string customUrl = baseUrl + "/stickers/" + fileId;
-                std::string formattedMessage = "ğŸ“ **è´´çº¸ URL**:\n" + customUrl;
+                std::string formattedMessage = "í ½í³ **è´´çº¸ URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent sticker URL: " + customUrl + " to chat ID: " + chatId);
             }
@@ -141,3 +141,9 @@ int Bot::getSavedOffset() {
     }
     return offset;
 }
+
+void Bot::handleWebhook(const nlohmann::json& webhookRequest) {
+    log(LogLevel::INFO,"Received Webhook: " + webhookRequest.dump());
+    processUpdate(webhookRequest);
+}
+

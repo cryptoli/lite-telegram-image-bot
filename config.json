@@ -1,7 +1,11 @@
 {
     "server": {
         "hostname": "yourdomain.com",
-        "port": 443
+        "port": 443,
+        "use_https": true,
+        "ssl_certificate": "path/to/your/certificate.crt",
+        "ssl_key": "path/to/your/private.key",
+	"allow_registration": true
     },
     "api_token": "your_telegram_api_token_here",
     "mime_types": {
@@ -52,3 +56,4 @@
         "max_age_seconds": 3600
     }
 }
+

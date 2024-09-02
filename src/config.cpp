@@ -20,6 +20,22 @@ int Config::getPort() const {
     return configData["server"]["port"].get<int>();
 }
 
+bool Config::getUseHttps() const {
+    return configData["server"]["use_https"].get<bool>();
+}
+
+std::string Config::getSslCertificate() const {
+    return configData["server"]["ssl_certificate"].get<std::string>();
+}
+
+std::string Config::getSslKey() const {
+    return configData["server"]["ssl_key"].get<std::string>();
+}
+
+bool Config::getAllowRegistration() const {
+    return configData["server"]["allow_registration"].get<bool>();
+}
+
 std::string Config::getApiToken() const {
     return configData["api_token"].get<std::string>();
 }
@@ -33,9 +49,10 @@ std::map<std::string, std::string> Config::getMimeTypes() const {
 }
 
 int Config::getCacheMaxSizeMB() const {
-    return configData["cache"]["max_size_mb"].get<int>();
+	    return configData["cache"]["max_size_mb"].get<int>();
 }
 
 int Config::getCacheMaxAgeSeconds() const {
-    return configData["cache"]["max_age_seconds"].get<int>();
+	    return configData["cache"]["max_age_seconds"].get<int>();
 }
+
