@@ -12,7 +12,13 @@ void Bot::processUpdate(const nlohmann::json& update) {
             const auto& message = update["message"];
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             Config config("config.json");
-            std::string baseUrl = "https://" + config.getHostname() + ":" + std::to_string(config.getPort());
+
+            // 判断端口号是否为80或443，如果是则不添加端口号
+            int port = config.getPort();
+            std::string baseUrl = "https://" + config.getHostname();
+            if (port != 80 && port != 443) {
+                baseUrl += ":" + std::to_string(port);
+            }
 
             // 处理图片
             if (message.contains("photo")) {
@@ -27,7 +33,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             if (message.contains("document")) {
                 std::string fileId = message["document"]["file_id"];
                 std::string customUrl = baseUrl + "/files/" + fileId;
-                std::string formattedMessage = "📄 **文件 URL**:\n[" + customUrl;
+                std::string formattedMessage = "📄 **文件 URL**:\n" + customUrl;
                 sendMessage(chatId, buildTelegramUrl(formattedMessage));
                 log(LogLevel::INFO,"Sent document URL: " + customUrl + " to chat ID: " + chatId);
             }
