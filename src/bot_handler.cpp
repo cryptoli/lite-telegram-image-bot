@@ -10,7 +10,7 @@ void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::s
         std::string updatesResponse = sendHttpRequest(updatesUrl);
 
         if (updatesResponse.empty()) {
-            log(LogLevel::ERROR,"Failed to get updates from Telegram API.");
+            log(LogLevel::LOGERROR,"Failed to get updates from Telegram API.");
             std::this_thread::sleep_for(std::chrono::seconds(2));
             continue;
         }
@@ -19,7 +19,7 @@ void processBotUpdates(Bot& bot, ThreadPool& pool, int& lastOffset, const std::s
         try {
             updates = nlohmann::json::parse(updatesResponse);
         } catch (nlohmann::json::parse_error& e) {
-            log(LogLevel::ERROR,"JSON parse error: " + std::string(e.what()));
+            log(LogLevel::LOGERROR,"JSON parse error: " + std::string(e.what()));
             std::this_thread::sleep_for(std::chrono::seconds(2));
             continue;
         }

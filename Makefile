@@ -1,6 +1,16 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -pthread -Iinclude
-LDFLAGS = -lcurl -lssl -lcrypto -pthread
+
+CXXFLAGS = -std=c++11 -Wall -I$(INCDIR)
+
+ifeq ($(OS),Windows_NT)
+    CXXFLAGS += -pthread -I/mingw64/include
+    LDFLAGS = -L/mingw64/lib -lcurl -lssl -lcrypto -lws2_32 -pthread
+    RM = cmd /C del /Q
+else
+    CXXFLAGS += -pthread
+    LDFLAGS = -lcurl -lssl -lcrypto -pthread
+    RM = rm -f
+endif
 
 TARGET = telegram_bot
 SRCDIR = src
@@ -18,6 +28,6 @@ $(TARGET): $(OBJ)
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 clean:
-	rm -f $(TARGET) $(OBJ)
+	$(RM) $(TARGET) $(OBJ)
 
 .PHONY: clean
