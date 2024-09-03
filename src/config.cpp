@@ -60,3 +60,7 @@ std::string Config::getWebhookUrl() const {
     return configData["server"]["webhook_url"].get<std::string>();
 }
 
+std::string Config::getSecretToken() const {
+    return configData["secret_token"].get<std::string>();
+}
+

@@ -14,6 +14,9 @@ public:
     void handleWebhook(const nlohmann::json& webhookRequest);
     int getSavedOffset();
     void saveOffset(int offset);
+    std::string getApiToken() const {
+        return apiToken;
+    }
 
 private:
     std::string apiToken;

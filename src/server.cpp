@@ -3,6 +3,7 @@
 #include "request_handler.h"
 #include "utils.h"
 #include "httplib.h"
+#include "bot.h"
 #include <memory>
 #include <fstream>
 #include <vector>
@@ -33,9 +34,10 @@ std::string generateImageGallery(const std::vector<std::string>& images) {
     return gallery;
 }
 
-void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool) {
+void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot) {
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
+    std::string secretToken = config.getSecretToken();
     int port = config.getPort();
     bool useHttps = config.getUseHttps();
     bool allowRegistration = config.getAllowRegistration();
@@ -65,6 +67,56 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
 
     svr->Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    });
+
+    svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {
+    log(LogLevel::INFO, "Headers:");
+    for (const auto& header : req.headers) {
+        log(LogLevel::INFO, header.first + ": " + header.second);
+    }
+
+    log(LogLevel::INFO, "Body: " + req.body);
+
+    // 验证 X-Telegram-Bot-Api-Secret-Token
+    if (req.has_header("X-Telegram-Bot-Api-Secret-Token")) {
+        std::string receivedToken = req.get_header_value("X-Telegram-Bot-Api-Secret-Token");
+        log(LogLevel::INFO, "Received Secret Token: " + receivedToken);
+
+        if (receivedToken != secretToken) {
+            res.set_content("Unauthorized", "text/plain");
+            log(LogLevel::LOGERROR, "Unauthorized Webhook request due to invalid token");
+            return;
+        }
+    } else {
+        res.set_content("Unauthorized", "text/plain");
+        log(LogLevel::LOGERROR, "Unauthorized Webhook request due to missing token");
+        return;
+    }
+
+    try {
+        nlohmann::json update = nlohmann::json::parse(req.body);
+
+        // 打印 userID、username 和消息内容
+        if (update.contains("message")) {
+            const auto& message = update["message"];
+            if (message.contains("from")) {
+                std::string userId = std::to_string(message["from"]["id"].get<int64_t>());
+                std::string username = message["from"].value("username", "unknown");
+                std::string text = message.value("text", "No text provided");
+
+                log(LogLevel::INFO, "User ID: " + userId);
+                log(LogLevel::INFO, "Username: " + username);
+                log(LogLevel::INFO, "Message: " + text);
+            }
+        }
+
+        bot.handleWebhook(update);  // 处理请求体中的更新
+        res.set_content("OK", "text/plain");
+        log(LogLevel::INFO, "Processed Webhook update");
+    } catch (const std::exception& e) {
+        log(LogLevel::LOGERROR, "Error processing Webhook: " + std::string(e.what()));
+        res.set_content("Bad Request", "text/plain");
+    }
     });
 
     svr->Get("/login", [](const httplib::Request& req, httplib::Response& res) {

@@ -13,12 +13,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             Config config("config.json");
 
-            std::string baseUrl = config.getUseHttps() ? "https://" : "http://";  // 根据 use_https 选择协议
-            baseUrl += config.getHostname();
-            int port = config.getPort();
-            if (port != 80 && port != 443) {
-                baseUrl += ":" + std::to_string(port);
-            }
+            std::string baseUrl = config.getWebhookUrl();
 
             // 处理图片
             if (message.contains("photo")) {
