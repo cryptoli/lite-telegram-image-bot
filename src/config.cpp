@@ -56,3 +56,7 @@ int Config::getCacheMaxAgeSeconds() const {
 	    return configData["cache"]["max_age_seconds"].get<int>();
 }
 
+std::string Config::getWebhookUrl() const {
+    return configData["server"]["webhook_url"].get<std::string>();
+}
+

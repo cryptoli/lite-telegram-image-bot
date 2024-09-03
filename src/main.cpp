@@ -9,6 +9,7 @@
 
 void setWebhook(const std::string& apiToken, const std::string& webhookUrl) {
     std::string setWebhookUrl = "https://api.telegram.org/bot" + apiToken + "/setWebhook?url=" + webhookUrl;
+    log(LogLevel::INFO, "Webhook set url: " + setWebhookUrl);
     std::string response = sendHttpRequest(setWebhookUrl);
     log(LogLevel::INFO,"Webhook set response: " + response);
 }
@@ -26,14 +27,8 @@ int main(int argc, char* argv[]) {
     // 创建 ImageCacheManager 实例，使用配置文件中的参数
     ImageCacheManager cacheManager("cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
 
-    // 构建 Webhook URL
-    std::string baseUrl = config.getUseHttps() ? "https://" : "http://";  // 根据 use_https 选择协议
-    baseUrl += config.getHostname();
-    int port = config.getPort();
-    if (port != 80 && port != 443) {
-        baseUrl += ":" + std::to_string(port);
-    }
-    std::string webhookUrl = baseUrl + "/webhook";
+    // 获取配置的 Webhook URL
+    std::string webhookUrl = config.getWebhookUrl();
 
     // 设置 Webhook
     setWebhook(apiToken, webhookUrl);
@@ -48,4 +43,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-

@@ -18,7 +18,7 @@ public:
     std::map<std::string, std::string> getMimeTypes() const;
     int getCacheMaxSizeMB() const;
     int getCacheMaxAgeSeconds() const;
-
+    std::string getWebhookUrl() const;
 
 private:
     nlohmann::json configData;

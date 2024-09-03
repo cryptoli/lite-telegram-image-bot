@@ -1,11 +1,12 @@
 {
     "server": {
         "hostname": "yourdomain.com",
-        "port": 443,
-        "use_https": true,
+        "port": 8080,
+        "use_https": false,
         "ssl_certificate": "path/to/your/certificate.crt",
         "ssl_key": "path/to/your/private.key",
-	"allow_registration": true
+        "allow_registration": true,
+        "webhook_url": "https://yourdomain.com:port/webhook"
     },
     "api_token": "your_telegram_api_token_here",
     "mime_types": {
