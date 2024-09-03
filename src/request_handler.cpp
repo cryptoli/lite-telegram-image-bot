@@ -4,15 +4,26 @@
 #include <nlohmann/json.hpp>
 #include <regex>
 
-std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes) {
-    std::string extension = filePath.substr(filePath.find_last_of("."));
-    auto it = mimeTypes.find(extension);
-    if (it != mimeTypes.end()) {
-        return it->second;
-    } else {
-        return "application/octet-stream";
+std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
+    try {
+        size_t pos = filePath.find_last_of(".");
+        if (pos == std::string::npos || pos == filePath.length() - 1) {
+            return defaultMimeType;
+        }
+
+        std::string extension = filePath.substr(pos);
+        auto it = mimeTypes.find(extension);
+
+        if (it != mimeTypes.end()) {
+            return it->second;
+        } else {
+            return defaultMimeType;
+        }
+    } catch (const std::exception& e) {
+        return defaultMimeType;
     }
 }
+
 
 std::string getFileExtension(const std::string& filePath) {
     std::size_t pos = filePath.find_last_of(".");
