@@ -1,7 +1,6 @@
 #include "config.h"
 #include "image_cache_manager.h"
 #include "thread_pool.h"
-#include "bot_handler.h"
 #include "server.h"
 #include "utils.h"
 #include "http_client.h"
