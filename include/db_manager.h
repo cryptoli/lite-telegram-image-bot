@@ -14,6 +14,9 @@ public:
     // 初始化数据库
     bool initialize();
 
+    // 创建表
+    bool createTables();
+
     // 添加用户（如果不存在）
     bool addUserIfNotExists(const std::string& telegramId, const std::string& username);
 
@@ -36,9 +39,6 @@ public:
     bool isRegistrationOpen();
 
 private:
-    // 创建表
-    bool createTables();
-
     sqlite3* db;
     std::string dbFile;
 };
