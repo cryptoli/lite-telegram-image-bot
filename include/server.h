@@ -5,7 +5,7 @@
 #include "config.h"
 #include "image_cache_manager.h"
 #include "thread_pool.h"
-#include "Bot.h"
+#include "bot.h"
 
 void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot);
 
