@@ -4,6 +4,7 @@
 #include "server.h"
 #include "utils.h"
 #include "http_client.h"
+#include "db_manager.h"
 #include <thread>
 #include <chrono>
 
@@ -24,6 +25,12 @@ void setWebhook(const std::string& apiToken, const std::string& webhookUrl, cons
 }
 
 int main(int argc, char* argv[]) {
+    // 初始化数据库
+    DBManager dbManager("bot_database.db");
+    if (!dbManager.initialize()) {
+        std::cerr << "数据库初始化失败，程序退出。" << std::endl;
+        return 1;
+    }
     // 加载配置文件
     Config config("config.json");
     std::string apiToken = config.getApiToken();
