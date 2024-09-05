@@ -69,6 +69,10 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
     });
 
+    svr->Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    });
+
     svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {
     log(LogLevel::INFO, "Headers:");
     for (const auto& header : req.headers) {
@@ -104,9 +108,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
                 std::string username = message["from"].value("username", "unknown");
                 std::string text = message.value("text", "No text provided");
 
-                log(LogLevel::INFO, "User ID: " + userId);
-                log(LogLevel::INFO, "Username: " + username);
-                log(LogLevel::INFO, "Message: " + text);
+                log(LogLevel::INFO, "User ID: " + userId + ", Username: " + username + ", Message: " + text);
             }
         }
 

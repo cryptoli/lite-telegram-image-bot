@@ -10,7 +10,7 @@
 
 void setWebhook(const std::string& apiToken, const std::string& webhookUrl, const std::string& secretToken) {
     while (true) {
-        std::string setWebhookUrl = "https://api.telegram.org/bot" + apiToken + "/setWebhook?url=" + webhookUrl + "/webhook&secret_token=" +secretToken;
+        std::string setWebhookUrl = "https://api.telegram.org/bot" + apiToken + "/setWebhook?url=" + webhookUrl + "/webhook&secret_token=" + secretToken;
         log(LogLevel::INFO, "Trying to set Webhook with url: " + setWebhookUrl);
         std::string response = sendHttpRequest(setWebhookUrl);
 
@@ -25,12 +25,16 @@ void setWebhook(const std::string& apiToken, const std::string& webhookUrl, cons
 }
 
 int main(int argc, char* argv[]) {
+    // 设置SQLite为序列化模式，确保线程安全
+    sqlite3_config(SQLITE_CONFIG_SERIALIZED);
+
     // 初始化数据库
     DBManager dbManager("bot_database.db");
     if (!dbManager.initialize()) {
-        std::cerr << "数据库初始化失败，程序退出。" << std::endl;
+        std::cerr << "Init Database error...quit." << std::endl;
         return 1;
     }
+
     // 加载配置文件
     Config config("config.json");
     std::string apiToken = config.getApiToken();

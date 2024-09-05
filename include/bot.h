@@ -3,12 +3,14 @@
 
 #include <string>
 #include <nlohmann/json.hpp>
+#include <vector>
 
 class Bot {
 public:
+    // 构造函数，初始化 Bot 并获取 Telegram Token
     Bot(const std::string& token);
 
-    // 处理Telegram更新
+    // 处理来自 Telegram 的更新
     void processUpdate(const nlohmann::json& update);
 
     // 处理Webhook请求
@@ -17,40 +19,39 @@ public:
     // 发送消息
     void sendMessage(const std::string& chatId, const std::string& message);
 
-    // 获取文件URL
-    std::string getFileUrl(const std::string& fileId);
-
-    // 保存和获取更新的offset
-    std::string getOffsetFile();
-    void saveOffset(int offset);
-    int getSavedOffset();
-
-private:
-    std::string apiToken;
-    std::string ownerId;
-
-    // 通用文件处理函数
-    void handleFile(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName);
-
-    // 收集文件命令
-    void collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage);
-
-    // 删除文件命令
-    void removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& message);
-
-    // 封禁用户命令
-    void banUser(const std::string& chatId, const nlohmann::json& message);
-
-    // 列出用户文件命令
-    void listMyFiles(const std::string& chatId, const std::string& userId);
-
-    // 开启和关闭注册
-    void openRegister(const std::string& chatId);
-    void closeRegister(const std::string& chatId);
+    // 初始化Bot所属者ID
     void initializeOwnerId();
 
-    // 判断用户是否为Bot拥有者
+    // 判断用户是否为Bot的拥有者
     bool isOwner(const std::string& userId);
+
+private:
+    std::string apiToken;  // Telegram API Token
+    std::string ownerId;   // Bot 所属者的 ID
+
+    // 处理收集文件命令
+    void collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage);
+
+    // 处理删除文件命令
+    void removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& replyMessage);
+
+    // 处理封禁用户命令
+    void banUser(const std::string& chatId, const nlohmann::json& replyMessage);
+
+    // 分页列出当前用户的文件
+    void listMyFiles(const std::string& chatId, const std::string& userId);
+
+    // 开启注册
+    void openRegister(const std::string& chatId);
+
+    // 关闭注册
+    void closeRegister(const std::string& chatId);
+
+    // 处理并发送文件链接
+    void handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message);
+
+    // 创建并发送文件链接
+    void createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName);
 };
 
 #endif
