@@ -21,7 +21,7 @@ DBManager::DBManager(const std::string& dbFile) : dbFile(dbFile) {
 }
 
 DBManager::~DBManager() {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
     if (sharedDb) {
         sqlite3_close(sharedDb);
         log(LogLevel::INFO, "Database connection closed.");
@@ -30,7 +30,7 @@ DBManager::~DBManager() {
 }
 
 bool DBManager::initialize() {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     if (!sharedDb) {
         log(LogLevel::LOGERROR, "Shared database is not initialized.");
@@ -102,7 +102,7 @@ bool DBManager::createTables() {
 }
 
 bool DBManager::isUserRegistered(const std::string& telegramId) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string query = "SELECT COUNT(*) FROM users WHERE telegram_id = ?";
     sqlite3_stmt* stmt;
@@ -123,7 +123,7 @@ bool DBManager::isUserRegistered(const std::string& telegramId) {
 }
 
 bool DBManager::addUserIfNotExists(const std::string& telegramId, const std::string& username) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     if (isUserRegistered(telegramId)) {
         return true;  // 用户已经存在
@@ -162,7 +162,7 @@ bool DBManager::addUserIfNotExists(const std::string& telegramId, const std::str
 }
 
 bool DBManager::addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     sqlite3_exec(sharedDb, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
     std::string insertFileSQL = "INSERT INTO files (user_id, file_id, file_link, file_name) "
@@ -195,7 +195,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
 }
 
 bool DBManager::removeFile(const std::string& userId, const std::string& fileName) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string deleteSQL = "DELETE FROM files WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?) AND file_name = ?";
     sqlite3_stmt* stmt;
@@ -221,7 +221,7 @@ bool DBManager::removeFile(const std::string& userId, const std::string& fileNam
 }
 
 bool DBManager::banUser(const std::string& telegramId) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string updateSQL = "UPDATE users SET is_banned = 1 WHERE telegram_id = ?";
     sqlite3_stmt* stmt;
@@ -246,7 +246,7 @@ bool DBManager::banUser(const std::string& telegramId) {
 }
 
 std::vector<std::pair<std::string, std::string>> DBManager::getUserFiles(const std::string& userId) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::vector<std::pair<std::string, std::string>> files;
     std::string selectSQL = "SELECT file_name, file_link FROM files WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?)";
@@ -266,7 +266,7 @@ std::vector<std::pair<std::string, std::string>> DBManager::getUserFiles(const s
 }
 
 void DBManager::setRegistrationOpen(bool isOpen) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string updateSQL = "INSERT OR REPLACE INTO settings (key, value) VALUES ('registration', ?)";
     sqlite3_stmt* stmt;
@@ -284,7 +284,7 @@ void DBManager::setRegistrationOpen(bool isOpen) {
 }
 
 bool DBManager::isRegistrationOpen() {
-    std::lock_guard<std::mutex> lock(dbMutex);
+    // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string selectSQL = "SELECT value FROM settings WHERE key = 'registration'";
     sqlite3_stmt* stmt;

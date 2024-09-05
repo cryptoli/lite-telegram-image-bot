@@ -50,7 +50,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
     if (dbManager.addUserIfNotExists(userId, chatId)) {
         dbManager.addFile(userId, fileId, customUrl, fileName);
-        sendMessage(chatId, buildTelegramUrl(formattedMessage));
+        sendMessage(chatId, formattedMessage);
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
     }
@@ -163,20 +163,9 @@ void Bot::closeRegister(const std::string& chatId) {
 }
 
 void Bot::initializeOwnerId() {
-    std::string getMeUrl = "https://api.telegram.org/bot" + apiToken + "/getMe";
-    std::string response = sendHttpRequest(getMeUrl);
-
-    if (!response.empty()) {
-        nlohmann::json jsonResponse = nlohmann::json::parse(response);
-        if (jsonResponse.contains("result") && jsonResponse["result"].contains("id")) {
-            ownerId = std::to_string(jsonResponse["result"]["id"].get<int64_t>());
-            log(LogLevel::INFO, "Bot owner ID initialized: " + ownerId);
-        } else {
-            log(LogLevel::LOGERROR, "Failed to retrieve owner ID from Telegram");
-        }
-    } else {
-        log(LogLevel::LOGERROR, "No response from Telegram API to retrieve owner ID");
-    }
+    Config config("config.json");
+    ownerId = config.getOwnerId();
+    log(LogLevel::INFO, "Bot owner ID initialized: " + ownerId);
 }
 
 bool Bot::isOwner(const std::string& userId) {

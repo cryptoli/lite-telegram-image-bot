@@ -20,6 +20,7 @@ public:
     int getCacheMaxAgeSeconds() const;
     std::string getWebhookUrl() const;
     std::string getSecretToken() const;
+    std::string getOwnerId() const;
 
 private:
     nlohmann::json configData;

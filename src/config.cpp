@@ -64,3 +64,8 @@ std::string Config::getSecretToken() const {
     return configData["secret_token"].get<std::string>();
 }
 
+std::string Config::getOwnerId() const {
+    return configData["owner_id"].get<std::string>();
+}
+
+
