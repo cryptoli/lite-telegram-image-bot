@@ -223,7 +223,7 @@ bool DBManager::removeFile(const std::string& userId, const std::string& fileNam
     // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string deleteSQL = "DELETE FROM files "
-                            "WHERE file_name = ? AND user_id IN (SELECT id FROM users WHERE telegram_id = ?)";
+                            "WHERE file_id = ? AND user_id IN (SELECT id FROM users WHERE telegram_id = ?)";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(sharedDb, deleteSQL.c_str(), -1, &stmt, nullptr);

@@ -205,7 +205,7 @@ void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int 
     int totalPages = (totalFiles + pageSize - 1) / pageSize; // 计算总页数
 
     if (page > totalPages || page < 1) {
-        sendMessage(chatId, "无效的页码。");
+        sendMessage(chatId, "暂无数据");
         return;
     }
 
