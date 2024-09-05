@@ -39,7 +39,7 @@ private:
     void banUser(const std::string& chatId, const nlohmann::json& replyMessage);
 
     // 分页列出当前用户的文件
-    void listMyFiles(const std::string& chatId, const std::string& userId);
+    void listMyFiles(const std::string& chatId, const std::string& userId, int page = 1, int pageSize = 5);
 
     // 开启注册
     void openRegister(const std::string& chatId);

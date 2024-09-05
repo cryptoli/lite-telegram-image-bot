@@ -11,27 +11,30 @@ Bot::Bot(const std::string& token) : apiToken(token) {
 
 // 处理文件并发送文件链接（适用于不同文件类型）
 void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message) {
-    if (message.contains("photo")) {
-        std::string fileId = message["photo"].back()["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "images", "🖼️", "图片");
-    } else if (message.contains("document")) {
-        std::string fileId = message["document"]["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "files", "📄", "文件");
-    } else if (message.contains("video")) {
-        std::string fileId = message["video"]["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "videos", "🎥", "视频");
-    } else if (message.contains("audio")) {
-        std::string fileId = message["audio"]["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "audios", "🎵", "音频");
-    } else if (message.contains("animation")) {
-        std::string fileId = message["animation"]["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "gifs", "🎬", "GIF");
-    } else if (message.contains("sticker")) {
-        std::string fileId = message["sticker"]["file_id"];
-        createAndSendFileLink(chatId, userId, fileId, baseUrl, "stickers", "📝", "贴纸");
-    } else {
-        sendMessage(chatId, "无法处理该文件类型");
+    // 定义支持的文件类型及对应的属性
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
+        {"photo", "images", "🖼️", "图片"},
+        {"document", "files", "📄", "文件"},
+        {"video", "videos", "🎥", "视频"},
+        {"audio", "audios", "🎵", "音频"},
+        {"animation", "gifs", "🎬", "GIF"},
+        {"sticker", "stickers", "📝", "贴纸"}
+    };
+
+    for (const auto& fileType : fileTypes) {
+        const std::string& type = std::get<0>(fileType);
+        const std::string& folder = std::get<1>(fileType);
+        const std::string& emoji = std::get<2>(fileType);
+        const std::string& description = std::get<3>(fileType);
+
+        if (message.contains(type)) {
+            std::string fileId = message[type].back()["file_id"];
+            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
+            return;
+        }
     }
+
+    sendMessage(chatId, "无法处理该文件类型");
 }
 
 // 创建并发送文件链接
@@ -63,6 +66,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             const auto& message = update["message"];
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             std::string userId = std::to_string(message["from"]["id"].get<int64_t>());
+            std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
             Config config("config.json");
 
             std::string baseUrl = config.getWebhookUrl();
@@ -70,25 +74,63 @@ void Bot::processUpdate(const nlohmann::json& update) {
             // 处理命令
             if (message.contains("text")) {
                 std::string text = message["text"];
+                std::string command = text.substr(0, text.find('@'));
 
-                if (text == "/collect" && message.contains("reply_to_message")) {
+                // 群组或超级群组中仅处理命令
+                if ((chatType == "group" || chatType == "supergroup") && text[0] != '/') {
+                    return;
+                }
+
+                // 处理 /collect 命令
+                if (command == "/collect" && message.contains("reply_to_message")) {
                     const auto& replyMessage = message["reply_to_message"];
                     collectFile(chatId, userId, message["from"].value("username", "unknown"), replyMessage);
-                } else if (text == "/remove" && message.contains("reply_to_message")) {
+                    return;
+                }
+
+                // 处理 /remove 命令
+                if (command == "/remove" && message.contains("reply_to_message")) {
                     removeFile(chatId, userId, message["reply_to_message"]);
-                } else if (text == "/ban" && isOwner(userId) && message.contains("reply_to_message")) {
+                    return;
+                }
+
+                // 处理 /ban 命令
+                if (command == "/ban" && isOwner(userId) && message.contains("reply_to_message")) {
                     banUser(chatId, message["reply_to_message"]);
-                } else if (text == "/my") {
-                    listMyFiles(chatId, userId);
-                } else if (text == "/openregister" && isOwner(userId)) {
-                    openRegister(chatId);
-                } else if (text == "/closeregister" && isOwner(userId)) {
-                    closeRegister(chatId);
+                    return;
+                }
+
+                // 处理 /my 命令
+                if (command.rfind("/my", 0) == 0) {
+                    int page = 1;
+                    if (text.length() > 4) {
+                        try {
+                            page = std::stoi(text.substr(4));
+                        } catch (...) {
+                            page = 1;
+                        }
+                    }
+                    listMyFiles(chatId, userId, page);
+                    return;
+                }
+
+                // 处理 /openregister 和 /closeregister 命令
+                if (isOwner(userId)) {
+                    if (command == "/openregister") {
+                        openRegister(chatId);
+                        return;
+                    }
+                    if (command == "/closeregister") {
+                        closeRegister(chatId);
+                        return;
+                    }
                 }
             }
 
-            // 处理文件类型
-            handleFileAndSend(chatId, userId, baseUrl, message);
+            // 私人聊天中处理文件类型
+            if (chatType == "private") {
+                handleFileAndSend(chatId, userId, baseUrl, message);
+            }
         }
     } catch (std::exception& e) {
         log(LogLevel::LOGERROR, "Error processing update: " + std::string(e.what()));
@@ -104,26 +146,50 @@ void Bot::collectFile(const std::string& chatId, const std::string& userId, cons
 
 // remove命令：删除文件
 void Bot::removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& replyMessage) {
-    if (replyMessage.contains("document")) {
-        std::string fileId = replyMessage["document"]["file_id"];
-        DBManager dbManager("bot_database.db");
-        if (dbManager.removeFile(userId, fileId)) {
-            sendMessage(chatId, "文件已删除: " + fileId);
-        } else {
-            sendMessage(chatId, "删除文件失败或文件不存在");
+    std::vector<std::pair<std::string, std::string>> fileTypes = {
+        {"photo", "file_id"},
+        {"document", "file_id"},
+        {"video", "file_id"},
+        {"audio", "file_id"},
+        {"animation", "file_id"},
+        {"sticker", "file_id"}
+    };
+
+    DBManager dbManager("bot_database.db");
+
+    for (const auto& fileType : fileTypes) {
+        const std::string& type = fileType.first;
+        const std::string& idField = fileType.second;
+
+        if (replyMessage.contains(type)) {
+            std::string fileId = replyMessage[type].back()[idField]; // 获取文件ID
+            if (dbManager.removeFile(userId, fileId)) {
+                sendMessage(chatId, "文件已删除: " + fileId);
+            } else {
+                sendMessage(chatId, "删除文件失败或文件不存在: " + fileId);
+            }
+            return;
         }
-    } else {
-        sendMessage(chatId, "无法删除此类型的文件");
     }
+
+    // 如果没有匹配的文件类型
+    sendMessage(chatId, "无法处理该文件类型");
 }
 
 // ban命令：封禁用户（仅限拥有者）
 void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage) {
-    std::string userId = std::to_string(replyMessage["from"]["id"].get<int64_t>());
+    std::string targetUserId = std::to_string(replyMessage["from"]["id"].get<int64_t>());
+
+    // 禁止bot所属者封禁自己
+    if (isOwner(targetUserId)) {
+        sendMessage(chatId, "无法封禁bot所属者。");
+        return;
+    }
+
     DBManager dbManager("bot_database.db");
-    if (dbManager.isUserRegistered(userId)) {
-        if (dbManager.banUser(userId)) {
-            sendMessage(chatId, "用户已被封禁: " + userId);
+    if (dbManager.isUserRegistered(targetUserId)) {
+        if (dbManager.banUser(targetUserId)) {
+            sendMessage(chatId, "用户已被封禁: " + targetUserId);
         } else {
             sendMessage(chatId, "封禁用户失败");
         }
@@ -133,17 +199,26 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
 }
 
 // my命令：列出当前用户的文件
-void Bot::listMyFiles(const std::string& chatId, const std::string& userId) {
+void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize) {
     DBManager dbManager("bot_database.db");
-    std::vector<std::pair<std::string, std::string>> files = dbManager.getUserFiles(userId);
+    int totalFiles = dbManager.getUserFileCount(userId);
+    int totalPages = (totalFiles + pageSize - 1) / pageSize; // 计算总页数
 
+    if (page > totalPages || page < 1) {
+        sendMessage(chatId, "无效的页码。");
+        return;
+    }
+
+    std::vector<std::pair<std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
+    
     if (files.empty()) {
-        sendMessage(chatId, "你还没有收集任何文件");
+        sendMessage(chatId, "你还没有收集任何文件。");
     } else {
-        std::string response = "你收集的文件:\n";
+        std::string response = "你收集的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
         for (const auto& file : files) {
             response += file.first + ": " + file.second + "\n";
         }
+        response += "\n使用 `/my page` 查看更多。";
         sendMessage(chatId, response);
     }
 }
