@@ -60,14 +60,27 @@ sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev
 make
 ```
 ### 4. 修改配置文件config.json
-需要修改hostname，api_token
+当前支持两种开启ssl/tls的方式
+1. hostname设置为解析到当前ip的域名，port为443，use_https设为true，正确设置ssl证书，webhook_url为当前域名即可不借用其他软件开启ssl/tls
+2. hostname设置为127.0.0.1，port为除了443外的端口，use_https设为false，不必填写ssl证书相关信息，可使用Caddy进行反代，webhook_url为caddy反代域名
+其他参数解释：
+api_token为botfather申请的bot api
+secret_token为随机字符串，可保证webhook接口安全
+owner_id为自己的telegram id，即管理bot的telegram账户id，可通过 @userinfobot 机器人获取
 ```bash
 {
     "server": {
-        "hostname": "yourdomain.com",
-        "port": 443
+        "hostname": "127.0.0.1",
+        "port": 8080,
+        "use_https": false,
+        "ssl_certificate": "path/to/your/certificate.crt",
+        "ssl_key": "path/to/your/private.key",
+        "allow_registration": true,
+        "webhook_url": "https://yourdomain.com"
     },
-    "api_token": "your_telegram_api_token_here",
+    "api_token": "your_telegram_api_token",
+    "secret_token": "random_secret_token",
+    "owner_id": "your_telegram_id",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -117,7 +130,7 @@ make
     }
 }
 ```
-### 5. 生成证书
+### 5. 生成证书（若不使用其他反代工具）
 证书放在项目根目录下，名称分别为server.key、server.crt
 ```bash
 sudo apt-get update
@@ -130,20 +143,11 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 ```
 ### 6. 运行机器人
 
-运行程序并传入 Telegram Bot API Token：
-
 ```bash
 ./telegram_bot
 ```
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
-
-## 配置说明
-
-在 `bot.cpp` 文件中，你可以根据需要调整机器人的配置，例如：
-
-- **处理的文件类型**：当前只处理图片（`photo`），你可以扩展到处理其他文件类型。
-- **API 请求频率**：默认情况下，每秒请求一次更新，可以根据需要调整请求频率。
 
 ## 贡献
 
