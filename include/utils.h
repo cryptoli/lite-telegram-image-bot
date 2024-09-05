@@ -6,7 +6,7 @@
 enum class LogLevel {
     INFO,
     WARNING,
-    ERROR
+    LOGERROR
 };
 
 void log(LogLevel level, const std::string& message);

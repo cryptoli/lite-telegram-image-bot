@@ -49,7 +49,7 @@ cd lite-telegram-image-bot
 在 Ubuntu 上，你可以使用以下命令安装所需的库：
 
 ```bash
-sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev
+sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev sqlite3 libsqlite3-dev
 ```
 
 ### 3. 编译项目

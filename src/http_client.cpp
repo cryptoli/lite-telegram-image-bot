@@ -30,11 +30,11 @@ std::string sendHttpRequest(const std::string& url) {
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            log(LogLevel::ERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)) + " URL: " + url);
+            log(LogLevel::LOGERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)) + " URL: " + url);
         }
         curl_easy_cleanup(curl);
     } else {
-        log(LogLevel::ERROR, "Failed to initialize CURL.");
+        log(LogLevel::LOGERROR, "Failed to initialize CURL.");
     }
     return response;
 }
@@ -51,11 +51,11 @@ std::string buildTelegramUrl(const std::string& text) {
             encoded_text = encoded;
             curl_free(encoded);
         } else {
-            log(LogLevel::ERROR, "Error encoding text: " + text);
+            log(LogLevel::LOGERROR, "Error encoding text: " + text);
         }
         curl_easy_cleanup(curl);
     } else {
-        log(LogLevel::ERROR, "Failed to initialize CURL for URL encoding.");
+        log(LogLevel::LOGERROR, "Failed to initialize CURL for URL encoding.");
     }
 
     log(LogLevel::INFO, "Built Telegram URL: " + encoded_text);

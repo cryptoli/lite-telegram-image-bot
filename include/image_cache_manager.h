@@ -5,15 +5,23 @@
 #include <string>
 #include <unordered_map>
 #include <chrono>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <thread>
 #include <algorithm>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <direct.h>
+#include <windows.h>
+#include <sys/stat.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <limits.h>
+#endif
 
 class ImageCacheManager {
 public:
@@ -22,15 +30,23 @@ public:
 
         // 将相对路径转换为绝对路径
         char absolutePath[PATH_MAX];
+#ifdef _WIN32
+        if (_fullpath(absolutePath, cacheDir.c_str(), PATH_MAX) != nullptr) {
+#else
         if (realpath(cacheDir.c_str(), absolutePath) != nullptr) {
+#endif
             this->cacheDir = std::string(absolutePath);
         } else {
             this->cacheDir = cacheDir;
-            log(LogLevel::ERROR, "Failed to resolve cache directory to absolute path: " + cacheDir);
+            log(LogLevel::LOGERROR, "Failed to resolve cache directory to absolute path: " + cacheDir);
         }
 
         if (!directoryExists(this->cacheDir)) {
+#ifdef _WIN32
+            _mkdir(this->cacheDir.c_str());
+#else
             mkdir(this->cacheDir.c_str(), 0777);
+#endif
             log(LogLevel::INFO, "Created cache directory: " + this->cacheDir);
         }
 
@@ -56,7 +72,7 @@ public:
             lastAccessTimes[fileId] = std::chrono::system_clock::now();
             log(LogLevel::INFO, "Cached image: " + fileId + " at " + filePath);
         } else {
-            log(LogLevel::ERROR, "Failed to open file for caching: " + filePath);
+            log(LogLevel::LOGERROR, "Failed to open file for caching: " + filePath);
         }
     }
 
@@ -72,7 +88,7 @@ public:
                 log(LogLevel::INFO, "Cache hit: " + fileId + " from " + filePath);
                 return imageData;
             } else {
-                log(LogLevel::ERROR, "Failed to open cached file: " + filePath);
+                log(LogLevel::LOGERROR, "Failed to open cached file: " + filePath);
             }
         } else {
             log(LogLevel::WARNING, "Cache miss for file ID: " + fileId);
@@ -91,11 +107,28 @@ private:
     bool stopCleaner = false;
 
     std::string getCacheFilePath(const std::string& fileId, const std::string& extension) const {
+#ifdef _WIN32
+        return cacheDir + "\\" + fileId + extension;
+#else
         return cacheDir + "/" + fileId + extension;
+#endif
     }
 
     size_t getCacheSize() const {
         size_t totalSize = 0;
+#ifdef _WIN32
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile((cacheDir + "\\*").c_str(), &findFileData);
+
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                    totalSize += (findFileData.nFileSizeHigh * (MAXDWORD + 1)) + findFileData.nFileSizeLow;
+                }
+            } while (FindNextFile(hFind, &findFileData) != 0);
+            FindClose(hFind);
+        }
+#else
         DIR* dirp = opendir(cacheDir.c_str());
         struct dirent* entry;
         while ((entry = readdir(dirp)) != nullptr) {
@@ -106,12 +139,18 @@ private:
             }
         }
         closedir(dirp);
+#endif
         return totalSize;
     }
 
     bool directoryExists(const std::string& path) {
+#ifdef _WIN32
+        struct _stat64i32 info;
+        if (_stat64i32(path.c_str(), &info) != 0) {
+#else
         struct stat info;
         if (stat(path.c_str(), &info) != 0) {
+#endif
             return false;
         } else if (info.st_mode & S_IFDIR) {
             return true;
@@ -121,8 +160,13 @@ private:
     }
 
     bool fileExists(const std::string& path) {
+#ifdef _WIN32
+        struct _stat64i32 buffer;
+        return (_stat64i32(path.c_str(), &buffer) == 0);
+#else
         struct stat buffer;
         return (stat(path.c_str(), &buffer) == 0);
+#endif
     }
 
     void cleanUpOldFiles() {
@@ -177,8 +221,13 @@ private:
     }
 
     size_t getFileSize(const std::string& path) {
+#ifdef _WIN32
+        struct _stat64i32 filestat;
+        if (_stat64i32(path.c_str(), &filestat) == 0) {
+#else
         struct stat filestat;
         if (stat(path.c_str(), &filestat) == 0) {
+#endif
             return filestat.st_size;
         }
         return 0;

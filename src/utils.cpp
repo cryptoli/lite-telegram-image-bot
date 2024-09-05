@@ -11,7 +11,7 @@ std::string logLevelToString(LogLevel level) {
             return "INFO";
         case LogLevel::WARNING:
             return "WARNING";
-        case LogLevel::ERROR:
+        case LogLevel::LOGERROR:
             return "ERROR";
         default:
             return "UNKNOWN";
@@ -21,7 +21,13 @@ std::string logLevelToString(LogLevel level) {
 std::string getCurrentTime() {
     std::time_t now = std::time(nullptr);
     std::tm buf;
-    localtime_r(&now, &buf);
+
+#ifdef _WIN32
+    localtime_s(&buf, &now);  // Windows使用localtime_s
+#else
+    localtime_r(&now, &buf);  // Linux使用localtime_r
+#endif
+
     std::ostringstream oss;
     oss << std::put_time(&buf, "%Y-%m-%d %H:%M:%S");
     return oss.str();

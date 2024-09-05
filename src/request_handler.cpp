@@ -39,7 +39,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (req.matches.size() < 2) {
         res.status = 400;
         res.set_content("Bad Request", "text/plain");
-        log(LogLevel::ERROR,"Bad request: URL does not match expected format.");
+        log(LogLevel::LOGERROR,"Bad request: URL does not match expected format.");
         return;
     }
 
@@ -50,7 +50,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (!std::regex_match(fileId, fileIdRegex)) {
         res.status = 400;
         res.set_content("Invalid File ID", "text/plain");
-        log(LogLevel::ERROR,"Invalid file ID received: " + fileId);
+        log(LogLevel::LOGERROR,"Invalid file ID received: " + fileId);
         return;
     }
 
@@ -82,7 +82,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
             std::string imageData = sendHttpRequest(fileDownloadUrl);
             if (imageData.empty()) {
-                log(LogLevel::ERROR,"Failed to download image from Telegram.");
+                log(LogLevel::LOGERROR,"Failed to download image from Telegram.");
                 res.status = 500;
                 res.set_content("Failed to download image", "text/plain");
                 return;
@@ -100,11 +100,11 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         } else {
             res.status = 404;
             res.set_content("File Not Found", "text/plain");
-            log(LogLevel::ERROR,"File not found in Telegram for ID: " + fileId);
+            log(LogLevel::LOGERROR,"File not found in Telegram for ID: " + fileId);
         }
     } catch (const std::exception& e) {
         res.status = 500;
         res.set_content("Internal Server Error", "text/plain");
-        log(LogLevel::ERROR,"Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
+        log(LogLevel::LOGERROR,"Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
     }
 }
