@@ -27,8 +27,12 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
         const std::string& emoji = std::get<2>(fileType);
         const std::string& description = std::get<3>(fileType);
 
-        if (message.contains(type)) {
+        if (message.contains("photo")) {
             std::string fileId = message[type].back()["file_id"];
+            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
+            return;
+        } else if(message.contains(type)) {
+            std::string fileId = message[type]["file_id"];
             createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
             return;
         }
