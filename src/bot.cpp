@@ -21,49 +21,31 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
         {"sticker", "stickers", "📝", "贴纸"}
     };
 
-    // 用于存储所有文件链接的字符串
-    std::string aggregatedMessage;
+    bool fileProcessed = false;  // 用于检查是否处理了至少一个文件
 
-    // 遍历所有支持的文件类型
     for (const auto& fileType : fileTypes) {
         const std::string& type = std::get<0>(fileType);
         const std::string& folder = std::get<1>(fileType);
         const std::string& emoji = std::get<2>(fileType);
         const std::string& description = std::get<3>(fileType);
 
-        // 处理图片数组，获取每张图片的最高分辨率版本
         if (type == "photo" && message.contains("photo")) {
             const auto& photos = message["photo"];
             if (photos.is_array()) {
                 // 获取每张图片的最高分辨率
                 std::string fileId = photos.back()["file_id"];
-                std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
-                aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
+                createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
+                fileProcessed = true;  // 标记为已处理文件
             }
-        }
-        // 处理视频
-        else if (type == "video" && message.contains("video")) {
-            std::string fileId = message["video"]["file_id"];
-            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
-            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
-        }
-        // 处理文档
-        else if (type == "document" && message.contains("document")) {
-            std::string fileId = message["document"]["file_id"];
-            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
-            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
-        }
-        // 处理其他类型的文件
-        else if (message.contains(type)) {
+        } else if (message.contains(type)) {
             std::string fileId = message[type]["file_id"];
-            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
-            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
+            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
+            fileProcessed = true;  // 标记为已处理文件
         }
     }
 
-    if (!aggregatedMessage.empty()) {
-        sendMessage(chatId, aggregatedMessage);
-    } else {
+    // 如果没有处理任何文件，提示用户
+    if (!fileProcessed) {
         sendMessage(chatId, "请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url");
     }
 }
@@ -82,16 +64,117 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
         return;
     }
 
+    // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, chatId)) {
         dbManager.addFile(userId, fileId, customUrl, fileName);
+        sendMessage(chatId, formattedMessage);  // 确保在这里发送消息
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
     }
-    log(LogLevel::INFO, "Created " + fileType + " URL: " + customUrl + " for chat ID: " + chatId);
+    log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId);
 }
 
+// 修改的 /my 命令，支持分页并通过按钮切换上下页
+void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
+    // 初始化DBManager
+    DBManager dbManager("bot_database.db");
+
+    // 获取用户文件总数并计算总页数
+    int totalFiles = dbManager.getUserFileCount(userId);
+    int totalPages = (totalFiles + pageSize - 1) / pageSize;  // 计算总页数
+
+    if (page > totalPages || page < 1) {
+        sendMessage(chatId, "暂无数据");
+        return;
+    }
+
+    // 获取文件并生成响应
+    std::vector<std::pair<std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
+    
+    if (files.empty()) {
+        sendMessage(chatId, "你还没有收集任何文件。");
+    } else {
+        std::string response = "你收集的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
+        for (const auto& file : files) {
+            response += file.first + ": " + file.second + "\n";
+        }
+
+        std::string inlineKeyboard = createPaginationKeyboard(page, totalPages);
+
+        // 如果有messageId，调用editMessageWithKeyboard来更新原消息
+        if (!messageId.empty()) {
+            editMessageWithKeyboard(chatId, messageId, response, inlineKeyboard);
+        } else {
+            sendMessageWithKeyboard(chatId, response, inlineKeyboard);
+        }
+    }
+}
+
+
+// 创建分页键盘
+std::string Bot::createPaginationKeyboard(int currentPage, int totalPages) {
+    nlohmann::json inlineKeyboard = nlohmann::json::array();
+
+    std::vector<nlohmann::json> row;
+
+    if (currentPage > 1) {
+        row.push_back({
+            {"text", "⬅️上一页"},
+            {"callback_data", "page_" + std::to_string(currentPage - 1)}
+        });
+    }
+
+    if (currentPage < totalPages) {
+        row.push_back({
+            {"text", "➡️下一页"},
+            {"callback_data", "page_" + std::to_string(currentPage + 1)}
+        });
+    }
+
+    if (!row.empty()) {
+        inlineKeyboard.push_back(row);
+    }
+
+    nlohmann::json keyboardMarkup = {
+        {"inline_keyboard", inlineKeyboard}
+    };
+
+    return keyboardMarkup.dump();  // 转换为字符串用于发送
+}
+
+// 发送带有键盘的消息
+void Bot::sendMessageWithKeyboard(const std::string& chatId, const std::string& message, const std::string& keyboard) {
+    std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + buildTelegramUrl(message) + "&reply_markup=" + buildTelegramUrl(keyboard);
+    sendHttpRequest(sendMessageUrl);
+}
+
+// 处理回调查询
+void Bot::processCallbackQuery(const nlohmann::json& callbackQuery) {
+    if (callbackQuery.contains("data")) {
+        std::string callbackData = callbackQuery["data"];
+        std::string chatId = std::to_string(callbackQuery["message"]["chat"]["id"].get<int64_t>());
+        std::string messageId = std::to_string(callbackQuery["message"]["message_id"].get<int64_t>());
+        std::string userId = std::to_string(callbackQuery["from"]["id"].get<int64_t>());
+
+        // 处理页码切换的回调
+        if (callbackData.rfind("page_", 0) == 0 && callbackData.length() > 5) {
+            int page = std::stoi(callbackData.substr(5));
+            listMyFiles(chatId, userId, page, 10, messageId);  // 传递messageId以便更新消息
+        }
+    }
+}
+
+// 在 processUpdate 中处理回调查询
 void Bot::processUpdate(const nlohmann::json& update) {
     try {
+        log(LogLevel::INFO, "Processing update: " + update.dump());
+        if (update.contains("callback_query")) {
+            const auto& callbackQuery = update["callback_query"];
+            log(LogLevel::INFO, "Processing callback query: " + callbackQuery.dump());
+            processCallbackQuery(callbackQuery);  // 处理回调
+            return;
+        }
+
         if (update.contains("message")) {
             const auto& message = update["message"];
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
@@ -228,31 +311,6 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
     }
 }
 
-// my命令：列出当前用户的文件
-void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize) {
-    DBManager dbManager("bot_database.db");
-    int totalFiles = dbManager.getUserFileCount(userId);
-    int totalPages = (totalFiles + pageSize - 1) / pageSize; // 计算总页数
-
-    if (page > totalPages || page < 1) {
-        sendMessage(chatId, "暂无数据");
-        return;
-    }
-
-    std::vector<std::pair<std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
-    
-    if (files.empty()) {
-        sendMessage(chatId, "你还没有收集任何文件。");
-    } else {
-        std::string response = "你收集的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
-        for (const auto& file : files) {
-            response += file.first + ": " + file.second + "\n";
-        }
-        response += "\n使用 `/my page` 查看更多。";
-        sendMessage(chatId, response);
-    }
-}
-
 // openregister命令：开启注册
 void Bot::openRegister(const std::string& chatId) {
     DBManager dbManager("bot_database.db");
@@ -286,4 +344,9 @@ void Bot::sendMessage(const std::string& chatId, const std::string& message) {
 void Bot::handleWebhook(const nlohmann::json& webhookRequest) {
     log(LogLevel::INFO, "Received Webhook: " + webhookRequest.dump());
     processUpdate(webhookRequest);
+}
+
+void Bot::editMessageWithKeyboard(const std::string& chatId, const std::string& messageId, const std::string& message, const std::string& keyboard) {
+    std::string editMessageUrl = telegramApiUrl + "/bot" + apiToken + "/editMessageText?chat_id=" + chatId + "&message_id=" + messageId + "&text=" + buildTelegramUrl(message) + "&reply_markup=" + buildTelegramUrl(keyboard);
+    sendHttpRequest(editMessageUrl);
 }
