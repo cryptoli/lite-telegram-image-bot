@@ -26,8 +26,9 @@ public:
     bool isOwner(const std::string& userId);
 
 private:
-    std::string apiToken;  // Telegram API Token
-    std::string ownerId;   // Bot 所属者的 ID
+    std::string apiToken;
+    std::string ownerId;
+    std::string telegramApiUrl;
 
     // 处理收集文件命令
     void collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage);

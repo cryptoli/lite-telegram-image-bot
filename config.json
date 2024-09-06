@@ -11,6 +11,7 @@
     "api_token": "your_telegram_api_token",
     "secret_token": "random_secret_token",
     "owner_id": "your_telegram_id",
+    "telegram_api_url": "https://api.telegram.org",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -59,4 +60,3 @@
         "max_age_seconds": 3600
     }
 }
-

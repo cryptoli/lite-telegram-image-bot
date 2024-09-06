@@ -21,30 +21,57 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
         {"sticker", "stickers", "📝", "贴纸"}
     };
 
+    // 用于存储所有文件链接的字符串
+    std::string aggregatedMessage;
+
+    // 遍历所有支持的文件类型
     for (const auto& fileType : fileTypes) {
         const std::string& type = std::get<0>(fileType);
         const std::string& folder = std::get<1>(fileType);
         const std::string& emoji = std::get<2>(fileType);
         const std::string& description = std::get<3>(fileType);
 
-        if (message.contains("photo")) {
-            std::string fileId = message[type].back()["file_id"];
-            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
-            return;
-        } else if(message.contains(type)) {
+        // 处理图片数组，获取每张图片的最高分辨率版本
+        if (type == "photo" && message.contains("photo")) {
+            const auto& photos = message["photo"];
+            if (photos.is_array()) {
+                // 获取每张图片的最高分辨率
+                std::string fileId = photos.back()["file_id"];
+                std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
+                aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
+            }
+        }
+        // 处理视频
+        else if (type == "video" && message.contains("video")) {
+            std::string fileId = message["video"]["file_id"];
+            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
+            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
+        }
+        // 处理文档
+        else if (type == "document" && message.contains("document")) {
+            std::string fileId = message["document"]["file_id"];
+            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
+            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
+        }
+        // 处理其他类型的文件
+        else if (message.contains(type)) {
             std::string fileId = message[type]["file_id"];
-            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description);
-            return;
+            std::string customUrl = baseUrl + "/" + folder + "/" + fileId;
+            aggregatedMessage += emoji + " **" + description + " URL**:\n" + customUrl + "\n";
         }
     }
 
-    sendMessage(chatId, "无法处理该文件类型");
+    if (!aggregatedMessage.empty()) {
+        sendMessage(chatId, aggregatedMessage);
+    } else {
+        sendMessage(chatId, "请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url");
+    }
 }
 
 // 创建并发送文件链接
 void Bot::createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName) {
     std::string customUrl = baseUrl + "/" + fileType + "/" + fileId;
-    std::string formattedMessage = emoji + " **" + fileType + " URL**:\n" + customUrl;
+    std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
 
     // 多线程环境下，独立创建数据库连接
     DBManager dbManager("bot_database.db");
@@ -57,11 +84,10 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
     if (dbManager.addUserIfNotExists(userId, chatId)) {
         dbManager.addFile(userId, fileId, customUrl, fileName);
-        sendMessage(chatId, formattedMessage);
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
     }
-    log(LogLevel::INFO, "Sent " + fileType + " URL: " + customUrl + " to chat ID: " + chatId);
+    log(LogLevel::INFO, "Created " + fileType + " URL: " + customUrl + " for chat ID: " + chatId);
 }
 
 void Bot::processUpdate(const nlohmann::json& update) {
@@ -244,6 +270,7 @@ void Bot::closeRegister(const std::string& chatId) {
 void Bot::initializeOwnerId() {
     Config config("config.json");
     ownerId = config.getOwnerId();
+    telegramApiUrl = config.getTelegramApiUrl();
     log(LogLevel::INFO, "Bot owner ID initialized: " + ownerId);
 }
 
@@ -252,7 +279,7 @@ bool Bot::isOwner(const std::string& userId) {
 }
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
-    std::string sendMessageUrl = "https://api.telegram.org/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + buildTelegramUrl(message);
+    std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + buildTelegramUrl(message);
     sendHttpRequest(sendMessageUrl);
 }
 

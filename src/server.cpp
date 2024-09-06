@@ -38,6 +38,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
     std::string secretToken = config.getSecretToken();
+    std::string telegramApiUrl = config.getTelegramApiUrl();
     int port = config.getPort();
     bool useHttps = config.getUseHttps();
     bool allowRegistration = config.getAllowRegistration();
@@ -53,24 +54,24 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         svr = make_unique<httplib::Server>();
     }
 
-    svr->Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    svr->Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
     });
 
-    svr->Get(R"(/files/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    svr->Get(R"(/files/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
     });
 
-    svr->Get(R"(/videos/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    svr->Get(R"(/videos/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
     });
 
-    svr->Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    svr->Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
     });
 
-    svr->Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager);
+    svr->Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
     });
 
     svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {

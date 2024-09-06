@@ -55,7 +55,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 }
 
 // 处理图片、非视频和非文档文件的缓存请求
-void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager) {
+void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl) {
     log(LogLevel::INFO,"Received request for image.");
 
     if (req.matches.size() < 2) {
@@ -79,7 +79,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     log(LogLevel::INFO,"Requesting file ID: " + fileId);
 
     // 获取 Telegram 文件信息的 URL
-    std::string telegramFileUrl = "https://api.telegram.org/bot" + apiToken + "/getFile?file_id=" + fileId;
+    std::string telegramFileUrl = telegramApiUrl + "/bot" + apiToken + "/getFile?file_id=" + fileId;
     log(LogLevel::INFO,"Request url: " + telegramFileUrl);
     std::string fileResponse = sendHttpRequest(telegramFileUrl);
     log(LogLevel::INFO,"Received response from Telegram for file ID: " + fileId);
@@ -89,7 +89,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         if (jsonResponse.contains("result") && jsonResponse["result"].contains("file_path")) {
             std::string filePath = jsonResponse["result"]["file_path"];
             std::string extension = getFileExtension(filePath);
-            std::string fileDownloadUrl = "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
+            std::string fileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + filePath;
             log(LogLevel::INFO,"File path obtained: " + filePath);
 
             std::string mimeType = getMimeType(filePath, mimeTypes);
