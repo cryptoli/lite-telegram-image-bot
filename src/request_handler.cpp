@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <nlohmann/json.hpp>
 #include <regex>
+#include <curl/curl.h>
 
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
     try {
@@ -24,7 +25,6 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
     }
 }
 
-
 std::string getFileExtension(const std::string& filePath) {
     std::size_t pos = filePath.find_last_of(".");
     if (pos != std::string::npos) {
@@ -33,6 +33,28 @@ std::string getFileExtension(const std::string& filePath) {
     return ""; // No extension found
 }
 
+// 流式传输回调函数
+size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Response* res) {
+    size_t totalSize = size * nmemb;
+    res->body.append(static_cast<char*>(ptr), totalSize);
+    return totalSize;
+}
+
+// 处理视频和文档的直接流式传输（不缓存）
+void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType) {
+    CURL* curl = curl_easy_init();
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());  // 设置要请求的文件下载 URL
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);  // 设置回调函数，流式传输数据
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将数据写入响应
+        curl_easy_perform(curl);  // 执行请求
+        curl_easy_cleanup(curl);  // 清理 curl 资源
+    }
+    res.set_header("Content-Type", mimeType);  // 设置 MIME 类型
+    res.set_header("Accept-Ranges", "bytes");  // 告诉浏览器支持分段下载
+}
+
+// 处理图片、非视频和非文档文件的缓存请求
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager) {
     log(LogLevel::INFO,"Received request for image.");
 
@@ -45,7 +67,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     std::string fileId = req.matches[1];
 
-    // 验证fileId的合法性
+    // 验证 fileId 的合法性
     std::regex fileIdRegex("^[A-Za-z0-9_-]+$");
     if (!std::regex_match(fileId, fileIdRegex)) {
         res.status = 400;
@@ -70,33 +92,37 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
             std::string fileDownloadUrl = "https://api.telegram.org/file/bot" + apiToken + "/" + filePath;
             log(LogLevel::INFO,"File path obtained: " + filePath);
 
-            // 尝试从缓存中获取图片数据
+            std::string mimeType = getMimeType(filePath, mimeTypes);
+
+            // 检查是否是视频或文档类型，不缓存，直接流式传输
+            if (mimeType.find("video") != std::string::npos || mimeType.find("application") != std::string::npos) {
+                log(LogLevel::INFO,"Streaming file directly from Telegram (no caching) for MIME type: " + mimeType);
+                handleStreamRequest(req, res, fileDownloadUrl, mimeType);
+                return;
+            }
+
+            // 其他类型文件，处理缓存逻辑
             std::string cachedImageData = cacheManager.getCachedImage(fileId, extension);
             if (!cachedImageData.empty()) {
                 log(LogLevel::INFO,"缓存命中");
-                std::string mimeType = getMimeType(fileId + extension, mimeTypes);
                 res.set_content(cachedImageData, mimeType);
-                log(LogLevel::WARNING,"Cache hit: Served image for file ID: " + fileId + " from cache.");
+                log(LogLevel::WARNING,"Cache hit: Served file for file ID: " + fileId + " from cache.");
                 return;
             }
 
-            std::string imageData = sendHttpRequest(fileDownloadUrl);
-            if (imageData.empty()) {
-                log(LogLevel::LOGERROR,"Failed to download image from Telegram.");
+            // 下载文件
+            std::string fileData = sendHttpRequest(fileDownloadUrl);
+            if (fileData.empty()) {
+                log(LogLevel::LOGERROR,"Failed to download file from Telegram.");
                 res.status = 500;
-                res.set_content("Failed to download image", "text/plain");
+                res.set_content("Failed to download file", "text/plain");
                 return;
             }
 
-            // 将图片数据缓存，并指定扩展名
-            cacheManager.cacheImage(fileId, imageData, extension);
-
-            std::string mimeType = getMimeType(filePath, mimeTypes);
-            log(LogLevel::INFO,"MIME type determined: " + mimeType);
-
-            // 返回图片数据
-            res.set_content(imageData, mimeType);
-            log(LogLevel::INFO,"Successfully served image for file ID: " + fileId + " with MIME type: " + mimeType);
+            // 将文件数据缓存，并返回内容
+            cacheManager.cacheImage(fileId, fileData, extension);
+            res.set_content(fileData, mimeType);
+            log(LogLevel::INFO,"Successfully served and cached file for file ID: " + fileId + " with MIME type: " + mimeType);
         } else {
             res.status = 404;
             res.set_content("File Not Found", "text/plain");
