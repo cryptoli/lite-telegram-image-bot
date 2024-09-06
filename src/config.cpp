@@ -68,4 +68,9 @@ std::string Config::getOwnerId() const {
     return configData["owner_id"].get<std::string>();
 }
 
+std::string Config::getTelegramApiUrl() const {
+    return configData["telegram_api_url"].get<std::string>();
+}
+
+
 

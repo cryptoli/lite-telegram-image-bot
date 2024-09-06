@@ -8,9 +8,9 @@
 #include <thread>
 #include <chrono>
 
-void setWebhook(const std::string& apiToken, const std::string& webhookUrl, const std::string& secretToken) {
+void setWebhook(const std::string& apiToken, const std::string& webhookUrl, const std::string& secretToken, std::string& telegramApiUrl) {
     while (true) {
-        std::string setWebhookUrl = "https://api.telegram.org/bot" + apiToken + "/setWebhook?url=" + webhookUrl + "/webhook&secret_token=" + secretToken;
+        std::string setWebhookUrl = telegramApiUrl + "/bot" + apiToken + "/setWebhook?url=" + webhookUrl + "/webhook&secret_token=" + secretToken;
         log(LogLevel::INFO, "Trying to set Webhook with url: " + setWebhookUrl);
         std::string response = sendHttpRequest(setWebhookUrl);
 
@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
     Config config("config.json");
     std::string apiToken = config.getApiToken();
     std::string secretToken = config.getSecretToken();
+    std::string telegramApiUrl = config.getTelegramApiUrl();
 
     log(LogLevel::INFO,"Starting application...");
 
@@ -55,7 +56,7 @@ int main(int argc, char* argv[]) {
     std::string webhookUrl = config.getWebhookUrl();
 
     // 设置 Webhook，处理404错误
-    setWebhook(apiToken, webhookUrl, secretToken);
+    setWebhook(apiToken, webhookUrl, secretToken, telegramApiUrl);
 
     // 启动服务器，在一个单独的线程中运行
     std::thread serverThread([&]() {

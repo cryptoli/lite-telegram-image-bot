@@ -7,25 +7,42 @@ Lite Telegram Image Bot 是一个基于 C++ 的 Telegram 机器人项目，可�
 - **接收和处理用户发送的图片**：用户可以直接将图片发送给机器人，机器人会返回一个可分享的 URL。
 - **处理群聊中的图片**：当机器人被 @ 并且是对图片的回复时，机器人会返回该图片的 URL。
 - **动态线程池**：自动调整线程池大小以优化性能。
-- **持久化状态**：自动保存并恢复 `offset`，以避免处理重复的消息。
 - **错误处理**：友好的错误提示和详细的日志记录，便于调试和维护。
 
 ## 项目结构
 
 ```
-/telegram_bot
+lite-telegram-image-bot/
+├── Caddyfile
+├── Makefile
+├── README.md
+├── config.json
 ├── include
-│   ├── bot.h                # Telegram Bot 功能
-│   ├── http_client.h        # HTTP 请求处理
-│   ├── thread_pool.h        # 线程池管理
-│   ├── utils.h              # 辅助功能
+│   ├── bot.h
+│   ├── config.h
+│   ├── db_manager.h
+│   ├── http_client.h
+│   ├── httplib.h
+│   ├── image_cache_manager.h
+│   ├── request_handler.h
+│   ├── server.h
+│   ├── thread_pool.h
+│   ├── thread_pool.tpp
+│   └── utils.h
 ├── src
-│   ├── bot.cpp              # Telegram Bot 实现
-│   ├── http_client.cpp      # HTTP 请求实现
-│   ├── main.cpp             # 主程序入口
-│   ├── thread_pool.cpp      # 线程池实现
-│   ├── utils.cpp            # 辅助功能实现
-└── Makefile                 # 编译和清理脚本
+│   ├── bot.cpp
+│   ├── config.cpp
+│   ├── db_manager.cpp
+│   ├── http_client.cpp
+│   ├── main.cpp
+│   ├── request_handler.cpp
+│   ├── server.cpp
+│   ├── thread_pool.cpp
+│   └── utils.cpp
+└── templates
+    ├── index.html
+    ├── login.html
+    └── register.html
 ```
 
 ## 环境要求
@@ -60,14 +77,27 @@ sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev
 make
 ```
 ### 4. 修改配置文件config.json
-需要修改hostname，api_token
+当前支持两种开启ssl/tls的方式
+1. hostname设置为解析到当前ip的域名，port为443，use_https设为true，正确设置ssl证书，webhook_url为当前域名即可不借用其他软件开启ssl/tls
+2. hostname设置为127.0.0.1，port为除了443外的端口，use_https设为false，不必填写ssl证书相关信息，可使用Caddy进行反代，webhook_url为caddy反代域名
+其他参数解释：
+api_token为botfather申请的bot api
+secret_token为随机字符串，可保证webhook接口安全
+owner_id为自己的telegram id，即管理bot的telegram账户id，可通过 @userinfobot 机器人获取
 ```bash
 {
     "server": {
-        "hostname": "yourdomain.com",
-        "port": 443
+        "hostname": "127.0.0.1",
+        "port": 8080,
+        "use_https": false,
+        "ssl_certificate": "path/to/your/certificate.crt",
+        "ssl_key": "path/to/your/private.key",
+        "allow_registration": true,
+        "webhook_url": "https://yourdomain.com"
     },
-    "api_token": "your_telegram_api_token_here",
+    "api_token": "your_telegram_api_token",
+    "secret_token": "random_secret_token",
+    "owner_id": "your_telegram_id",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -117,7 +147,7 @@ make
     }
 }
 ```
-### 5. 生成证书
+### 5. 生成证书（若不使用其他反代工具）
 证书放在项目根目录下，名称分别为server.key、server.crt
 ```bash
 sudo apt-get update
@@ -130,20 +160,21 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 ```
 ### 6. 运行机器人
 
-运行程序并传入 Telegram Bot API Token：
-
 ```bash
 ./telegram_bot
 ```
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
-
-## 配置说明
-
-在 `bot.cpp` 文件中，你可以根据需要调整机器人的配置，例如：
-
-- **处理的文件类型**：当前只处理图片（`photo`），你可以扩展到处理其他文件类型。
-- **API 请求频率**：默认情况下，每秒请求一次更新，可以根据需要调整请求频率。
+### 7. 机器人命令
+可将下面的命令发送给botfather
+```bash
+collect - 收集并保存回复中的文件
+remove - 删除回复中的文件
+ban - 封禁用户（仅限拥有者）
+my - 列出当前用户收集的文件
+openregister - 开启获取文件URL功能（仅限拥有者）
+closeregister - 关闭获取文件URL功能（仅限拥有者）
+```
 
 ## 贡献
 

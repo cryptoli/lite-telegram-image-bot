@@ -21,6 +21,7 @@ public:
     std::string getWebhookUrl() const;
     std::string getSecretToken() const;
     std::string getOwnerId() const;
+    std::string getTelegramApiUrl() const;
 
 private:
     nlohmann::json configData;
