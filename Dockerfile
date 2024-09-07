@@ -44,6 +44,8 @@ RUN wget -qO /usr/bin/caddy "https://caddyserver.com/api/download?os=linux&arch=
 WORKDIR /app
 COPY --from=build /app/telegram_bot /app/telegram_bot
 COPY supervisord.conf /etc/supervisord.conf
+COPY config.json /app/config.json
+COPY Caddyfile /app/Caddyfile
 
 EXPOSE 443
 
