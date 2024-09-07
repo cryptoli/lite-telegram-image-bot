@@ -1,4 +1,5 @@
 FROM alpine:3.14
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 RUN apk --no-cache add \
     g++ \
@@ -12,8 +13,9 @@ RUN apk --no-cache add \
     libstdc++ \
     libgcc \
     supervisor \
-    caddy \
     && rm -rf /var/cache/apk/*
+
+RUN curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy && chmod +x /usr/bin/caddy
 
 WORKDIR /app
 
