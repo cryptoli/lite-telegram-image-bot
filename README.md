@@ -167,7 +167,11 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 ```
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
-### 7. docker启动
+### 7. 构建docker镜像（从镜像仓库拉取可跳过构建）
+```bash
+docker build -t lite-telegram-image-bot .
+```
+### 8. docker启动
 WEBHOOK_URL=https://your_domain.com 如果你已经有其他应用可以采用其他路径例如：WEBHOOK_URL=https://your_domain.com/example ，可以反向代理这个地址，端口改成其他的
 SECRET_TOKEN一定要保持足够长度且随机
 ```bash
@@ -182,7 +186,7 @@ docker run -d \
     my-bot-with-caddy
 
 ```
-### 7. 机器人命令
+### 9. 机器人命令
 可将下面的命令发送给botfather
 ```bash
 collect - 收集并保存回复中的文件

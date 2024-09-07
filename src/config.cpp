@@ -14,7 +14,7 @@ Config::Config(const std::string& filePath) {
 }
 
 std::string Config::getHostname() const {
-    const char* envHostname = std::getenv("HOSTNAME");
+    const char* envHostname = std::getenv("HOST_NAME");
     if (envHostname != nullptr) {
         return std::string(envHostname);
     }
