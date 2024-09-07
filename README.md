@@ -167,8 +167,11 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 ```
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
-### 7. 构建docker镜像（从镜像仓库拉取可跳过构建）
+### 7. 构建docker镜像
 ```bash
+# 从仓库拉取
+docker push ljh123/telegram-bot:latest
+# OR 自己构建
 docker build -t lite-telegram-image-bot .
 ```
 ### 8. docker启动
