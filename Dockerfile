@@ -1,12 +1,13 @@
-FROM alpine:3.14
+FROM alpine:3.17
 
-sed -i 's/dl-cdn.alpinelinux.org/dl-3.alpinelinux.org/g' /etc/apk/repositories
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
 
 RUN apk --no-cache add \
     g++ \
     make \
     curl \
     libcurl \
+    curl-dev \
     openssl \
     libssl1.1 \
     sqlite-libs \
@@ -17,6 +18,9 @@ RUN apk --no-cache add \
     && rm -rf /var/cache/apk/*
 
 RUN curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy && chmod +x /usr/bin/caddy
+RUN mkdir -p /app/include/nlohmann && \
+    curl -L https://github.com/nlohmann/json/releases/download/v3.10.5/json.hpp -o /app/include/nlohmann/json.hpp
+
 
 WORKDIR /app
 
