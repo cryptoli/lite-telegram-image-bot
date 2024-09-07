@@ -9,9 +9,9 @@ RUN apk --no-cache add \
     g++ \
     make \
     musl-dev \
-    curl-dev \
-    openssl-dev \
-    sqlite-dev \
+    curl-static \
+    openssl-libs-static \
+    sqlite-static \
     libstdc++ \
     libgcc
 
