@@ -168,7 +168,7 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 
 你可以通过 `@BotFather` 在 Telegram 中创建并获取你的 Bot Token。
 ### 7. docker启动
-WEBHOOK_URL=https://your_domain.com 如果你已经有其他应用可以采用其他路径例如：WEBHOOK_URL=https://your_domain.com/example
+WEBHOOK_URL=https://your_domain.com 如果你已经有其他应用可以采用其他路径例如：WEBHOOK_URL=https://your_domain.com/example ，可以反向代理这个地址，端口改成其他的
 SECRET_TOKEN一定要保持足够长度且随机
 ```bash
 docker run -d \
