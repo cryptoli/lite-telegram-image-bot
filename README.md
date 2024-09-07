@@ -199,11 +199,6 @@ ban - 封禁用户（仅限拥有者）
 openregister - 开启获取文件URL功能（仅限拥有者）
 closeregister - 关闭获取文件URL功能（仅限拥有者）
 ```
-### 下面请欣赏一些实例图片和视频
-<video width="320" height="240" controls>
-  <source src="https://image.cryptothrift.cc/videos/BAACAgQAAxkBAAIBIGbaeOvE5jqbAAH4TgiJeGW2QvbmegACUxYAAuN30VKP7JLWw6L_4DYE" type="video/mp4">
-</video>
-![示例图片](https://image.cryptothrift.cc/images/AgACAgQAAxkBAANCZtS-XOzzw5Sykx61PPtupB_tO6gAAkHEMRukS6hSSjovi84RNWQBAAMCAAN5AAM1BA)
 ## 贡献
 
 欢迎提交 issue 或 pull request 来帮助改进此项目。如果你有新的想法或发现了 bug，欢迎与我们分享。
