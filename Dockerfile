@@ -1,14 +1,14 @@
 # Stage 1: Build stage
 FROM alpine:3.17 AS build
 
+# 使用阿里云的源加速下载
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-# 安装编译所需的 musl 静态编译工具链和开发依赖
+# 安装编译所需的依赖，包括静态链接所需的开发库
 RUN apk --no-cache add \
     g++ \
     make \
     musl-dev \
-    musl-gcc \
     curl-dev \
     openssl-dev \
     sqlite-dev \
@@ -26,11 +26,12 @@ WORKDIR /app
 COPY . .
 
 # 编译项目，使用 musl 静态编译
-RUN musl-gcc -static -o telegram_bot src/*.cpp -Iinclude -lcurl -lssl -lcrypto -pthread -lsqlite3
+RUN g++ -static -o telegram_bot src/*.cpp -Iinclude -lcurl -lssl -lcrypto -pthread -lsqlite3
 
 # Stage 2: Final stage (runtime environment)
 FROM alpine:3.17
 
+# 使用阿里云的源加速下载
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 安装运行时所需的最小依赖
