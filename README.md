@@ -39,7 +39,7 @@ lite-telegram-image-bot/
 │   ├── server.cpp
 │   ├── thread_pool.cpp
 │   └── utils.cpp
-└── templates
+└── templates  暂未使用
     ├── index.html
     ├── login.html
     └── register.html
@@ -83,7 +83,8 @@ make
 其他参数解释：
 api_token为botfather申请的bot api
 secret_token为随机字符串，可保证webhook接口安全
-owner_id为自己的telegram id，即管理bot的telegram账户id，可通过 @userinfobot 机器人获取
+owner_id为自己的telegram id，即管理bot的telegram账户id，可通过 @userinfobot 机器人获取,
+telegram_api_url默认为官方api，如果需要自定义可以修改
 ```bash
 {
     "server": {
@@ -98,6 +99,7 @@ owner_id为自己的telegram id，即管理bot的telegram账户id，可通过 @u
     "api_token": "your_telegram_api_token",
     "secret_token": "random_secret_token",
     "owner_id": "your_telegram_id",
+    "telegram_api_url": "https://api.telegram.org",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -169,9 +171,9 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 可将下面的命令发送给botfather
 ```bash
 collect - 收集并保存回复中的文件
-remove - 删除回复中的文件
-ban - 封禁用户（仅限拥有者）
+remove - 删除已收集文件（仍然可以访问）
 my - 列出当前用户收集的文件
+ban - 封禁用户（仅限拥有者）
 openregister - 开启获取文件URL功能（仅限拥有者）
 closeregister - 关闭获取文件URL功能（仅限拥有者）
 ```
