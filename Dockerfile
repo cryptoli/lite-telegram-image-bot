@@ -1,5 +1,6 @@
 FROM alpine:3.14
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+sed -i 's/dl-cdn.alpinelinux.org/dl-3.alpinelinux.org/g' /etc/apk/repositories
 
 RUN apk --no-cache add \
     g++ \
