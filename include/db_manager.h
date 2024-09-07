@@ -33,12 +33,16 @@ public:
 
     // 封禁用户
     bool banUser(const std::string& telegramId);
+    bool unbanUser(const std::string& telegramId);
 
     // 设置是否允许注册
     void setRegistrationOpen(bool isOpen);
 
     // 检查是否允许注册
     bool isRegistrationOpen();
+    int getTotalUserCount();
+    std::vector<std::tuple<std::string, std::string, bool>> getUsersForBan(int page, int pageSize);
+    bool isUserBanned(const std::string& telegramId);
 
 private:
     static sqlite3* sharedDb;
