@@ -89,14 +89,14 @@ void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int 
     }
 
     // 获取文件并生成响应
-    std::vector<std::pair<std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
+    std::vector<std::tuple<std::string, std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
     
     if (files.empty()) {
         sendMessage(chatId, "你还没有收集任何文件。");
     } else {
         std::string response = "你收集的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
         for (const auto& file : files) {
-            response += file.first + ": " + file.second + "\n";
+            response += std::get<0>(file) + ": " + std::get<1>(file) + "\n";
         }
 
         std::string inlineKeyboard = createPaginationKeyboard(page, totalPages);
@@ -142,13 +142,59 @@ std::string Bot::createPaginationKeyboard(int currentPage, int totalPages) {
     return keyboardMarkup.dump();  // 转换为字符串用于发送
 }
 
+void Bot::listRemovableFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
+    DBManager dbManager("bot_database.db");
+
+    int totalFiles = dbManager.getUserFileCount(userId);
+    int totalPages = (totalFiles + pageSize - 1) / pageSize;
+
+    if (page > totalPages || page < 1) {
+        sendMessage(chatId, "暂无数据");
+        return;
+    }
+
+    std::vector<std::tuple<std::string, std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
+    
+    if (files.empty()) {
+        sendMessage(chatId, "你没有可以删除的文件。");
+    } else {
+        std::string response = "请选择你要删除的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
+        nlohmann::json inlineKeyboard = nlohmann::json::array();
+
+        for (const auto& file : files) {
+            std::string fileId = std::get<2>(file);
+            std::string fileUrl = std::get<1>(file);
+            
+            // 每个文件生成一行按钮
+            inlineKeyboard.push_back({
+                {{"text", fileUrl}, {"callback_data", "delete_" + fileId}}
+            });
+        }
+
+        if (page > 1) {
+            inlineKeyboard.push_back({{{"text", "⬅️上一页"}, {"callback_data", "remove_page_" + std::to_string(page - 1)}}});
+        }
+
+        if (page < totalPages) {
+            inlineKeyboard.push_back({{{"text", "➡️下一页"}, {"callback_data", "remove_page_" + std::to_string(page + 1)}}});
+        }
+
+        nlohmann::json keyboardMarkup = {{"inline_keyboard", inlineKeyboard}};
+
+        if (!messageId.empty()) {
+            editMessageWithKeyboard(chatId, messageId, response, keyboardMarkup.dump());
+        } else {
+            sendMessageWithKeyboard(chatId, response, keyboardMarkup.dump());
+        }
+    }
+}
+
 // 发送带有键盘的消息
 void Bot::sendMessageWithKeyboard(const std::string& chatId, const std::string& message, const std::string& keyboard) {
     std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + buildTelegramUrl(message) + "&reply_markup=" + buildTelegramUrl(keyboard);
     sendHttpRequest(sendMessageUrl);
 }
 
-// 处理回调查询
 void Bot::processCallbackQuery(const nlohmann::json& callbackQuery) {
     if (callbackQuery.contains("data")) {
         std::string callbackData = callbackQuery["data"];
@@ -156,10 +202,29 @@ void Bot::processCallbackQuery(const nlohmann::json& callbackQuery) {
         std::string messageId = std::to_string(callbackQuery["message"]["message_id"].get<int64_t>());
         std::string userId = std::to_string(callbackQuery["from"]["id"].get<int64_t>());
 
-        // 处理页码切换的回调
         if (callbackData.rfind("page_", 0) == 0 && callbackData.length() > 5) {
             int page = std::stoi(callbackData.substr(5));
             listMyFiles(chatId, userId, page, 10, messageId);  // 传递messageId以便更新消息
+        }
+        // 处理分页回调
+        else if (callbackData.rfind("remove_page_", 0) == 0) {
+            int page = std::stoi(callbackData.substr(12));
+            log(LogLevel::INFO, chatId+ "," + userId + ",list removable fils.");
+            listRemovableFiles(chatId, userId, page, 10, messageId);  // 更新消息
+        }
+        // 处理删除文件回调
+        else if (callbackData.rfind("delete_", 0) == 0) {
+            std::string fileId = callbackData.substr(7);
+            log(LogLevel::INFO, userId + " delete file: " + fileId + ", callbackData: " + callbackQuery.dump());
+            DBManager dbManager("bot_database.db");
+            if (dbManager.removeFile(userId, fileId)) {
+                sendMessage(chatId, "文件已删除: " + fileId);
+            } else {
+                sendMessage(chatId, "删除文件失败或文件不存在: " + fileId);
+            }
+
+            // 刷新文件列表
+            listRemovableFiles(chatId, userId, 1, 10, messageId);
         }
     }
 }
@@ -202,10 +267,19 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 }
 
                 // 处理 /remove 命令
-                if (command == "/remove" && message.contains("reply_to_message")) {
-                    removeFile(chatId, userId, message["reply_to_message"]);
+                if (command == "/remove") {
+                    int page = 1;
+                    if (text.length() > 7) {
+                        try {
+                            page = std::stoi(text.substr(7));
+                        } catch (...) {
+                            page = 1;
+                        }
+                    }
+                    listRemovableFiles(chatId, userId, page, 10);
                     return;
                 }
+
 
                 // 处理 /ban 命令
                 if (command == "/ban" && isOwner(userId) && message.contains("reply_to_message")) {

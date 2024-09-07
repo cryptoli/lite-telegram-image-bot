@@ -27,7 +27,7 @@ public:
     bool removeFile(const std::string& userId, const std::string& fileName);
 
     // 获取用户的文件列表
-    std::vector<std::pair<std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
+    std::vector<std::tuple<std::string, std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
 
     int getUserFileCount(const std::string& userId);
 

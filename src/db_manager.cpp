@@ -223,7 +223,7 @@ bool DBManager::removeFile(const std::string& userId, const std::string& fileNam
     // std::lock_guard<std::mutex> lock(dbMutex);
 
     std::string deleteSQL = "DELETE FROM files "
-                            "WHERE file_id = ? AND user_id IN (SELECT id FROM users WHERE telegram_id = ?)";
+                            "WHERE id = ? AND user_id IN (SELECT id FROM users WHERE telegram_id = ?)";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(sharedDb, deleteSQL.c_str(), -1, &stmt, nullptr);
@@ -281,9 +281,9 @@ bool DBManager::banUser(const std::string& telegramId) {
     return true;
 }
 
-std::vector<std::pair<std::string, std::string>> DBManager::getUserFiles(const std::string& userId, int page, int pageSize) {
-    std::vector<std::pair<std::string, std::string>> files;
-    std::string selectSQL = "SELECT file_name, file_link FROM files WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?) LIMIT ? OFFSET ?";
+std::vector<std::tuple<std::string, std::string, std::string>> DBManager::getUserFiles(const std::string& userId, int page, int pageSize) {
+    std::vector<std::tuple<std::string, std::string, std::string>> files;
+    std::string selectSQL = "SELECT file_name, file_link, id FROM files WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?) LIMIT ? OFFSET ?";
 
     sqlite3_stmt* stmt;
     sqlite3_prepare_v2(sharedDb, selectSQL.c_str(), -1, &stmt, nullptr);
@@ -294,7 +294,8 @@ std::vector<std::pair<std::string, std::string>> DBManager::getUserFiles(const s
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         std::string fileName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
         std::string fileLink = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        files.emplace_back(fileName, fileLink);
+        std::string fileId = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        files.emplace_back(fileName, fileLink, fileId);
     }
     sqlite3_finalize(stmt);
     log(LogLevel::INFO, "Fetched " + std::to_string(files.size()) + " files for user ID: " + userId + " (Page: " + std::to_string(page) + ")");
