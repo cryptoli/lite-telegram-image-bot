@@ -170,7 +170,7 @@ sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /path/to/your/project
 ### 7. 构建docker镜像
 ```bash
 # 从仓库拉取
-docker push ljh123/telegram-bot:latest
+docker pull ljh123/lite-telegram-image-bot:latest
 # OR 自己构建
 docker build -t lite-telegram-image-bot .
 ```
@@ -186,7 +186,7 @@ docker run -d \
     -e OWNER_ID=your_owner_id \
     -e TELEGRAM_API_URL=https://api.telegram.org \
     -p 443:443 \
-    my-bot-with-caddy
+    ljh123/lite-telegram-image-bot
 
 ```
 ### 9. 机器人命令
