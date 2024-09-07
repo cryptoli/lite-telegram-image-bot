@@ -27,18 +27,22 @@ public:
     bool removeFile(const std::string& userId, const std::string& fileName);
 
     // 获取用户的文件列表
-    std::vector<std::pair<std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
+    std::vector<std::tuple<std::string, std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
 
     int getUserFileCount(const std::string& userId);
 
     // 封禁用户
     bool banUser(const std::string& telegramId);
+    bool unbanUser(const std::string& telegramId);
 
     // 设置是否允许注册
     void setRegistrationOpen(bool isOpen);
 
     // 检查是否允许注册
     bool isRegistrationOpen();
+    int getTotalUserCount();
+    std::vector<std::tuple<std::string, std::string, bool>> getUsersForBan(int page, int pageSize);
+    bool isUserBanned(const std::string& telegramId);
 
 private:
     static sqlite3* sharedDb;

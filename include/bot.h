@@ -3,56 +3,37 @@
 
 #include <string>
 #include <nlohmann/json.hpp>
-#include <vector>
+#include <map>
 
 class Bot {
 public:
-    // 构造函数，初始化 Bot 并获取 Telegram Token
     Bot(const std::string& token);
-
-    // 处理来自 Telegram 的更新
+    void handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message, const std::string& username);
+    void createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName, const std::string& username);
     void processUpdate(const nlohmann::json& update);
-
-    // 处理Webhook请求
-    void handleWebhook(const nlohmann::json& webhookRequest);
-
-    // 发送消息
+    void processCallbackQuery(const nlohmann::json& callbackQuery);
+    void listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize = 10, const std::string& messageId = "");
+    void listRemovableFiles(const std::string& chatId, const std::string& userId, int page, int pageSize = 10, const std::string& messageId = "");
+    void listUsersForBan(const std::string& chatId, int page, int pageSize = 10, const std::string& messageId = "");
+    std::string createPaginationKeyboard(int currentPage, int totalPages);
     void sendMessage(const std::string& chatId, const std::string& message);
-
-    // 初始化Bot所属者ID
+    void sendMessageWithKeyboard(const std::string& chatId, const std::string& message, const std::string& keyboard);
+    void collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage);
+    void removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& replyMessage);
+    void banUser(const std::string& chatId, const nlohmann::json& replyMessage);
+    void banUserById(const std::string& chatId, const std::string& targetUserId);
+    void toggleBanUser(const std::string& chatId, const std::string& targetUserId, const std::string& messageId);
+    void openRegister(const std::string& chatId);
+    void closeRegister(const std::string& chatId);
+    void handleWebhook(const nlohmann::json& webhookRequest);
     void initializeOwnerId();
-
-    // 判断用户是否为Bot的拥有者
     bool isOwner(const std::string& userId);
+    void editMessageWithKeyboard(const std::string& chatId, const std::string& messageId, const std::string& message, const std::string& keyboard);
 
 private:
     std::string apiToken;
-    std::string ownerId;
     std::string telegramApiUrl;
-
-    // 处理收集文件命令
-    void collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage);
-
-    // 处理删除文件命令
-    void removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& replyMessage);
-
-    // 处理封禁用户命令
-    void banUser(const std::string& chatId, const nlohmann::json& replyMessage);
-
-    // 分页列出当前用户的文件
-    void listMyFiles(const std::string& chatId, const std::string& userId, int page = 1, int pageSize = 5);
-
-    // 开启注册
-    void openRegister(const std::string& chatId);
-
-    // 关闭注册
-    void closeRegister(const std::string& chatId);
-
-    // 处理并发送文件链接
-    void handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message);
-
-    // 创建并发送文件链接
-    void createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName);
+    std::string ownerId;
 };
 
 #endif
