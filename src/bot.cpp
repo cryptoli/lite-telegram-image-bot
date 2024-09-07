@@ -63,6 +63,11 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
         sendMessage(chatId, "注册已关闭，无法收集文件");
         return;
     }
+    // 检查是否被封禁
+    if(!isOwner(userId) && dbManager.isUserBanned(userId)) {
+        sendMessage(chatId, "您已被封禁，无法收集文件");
+        return;
+    }
 
     // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, username)) {
@@ -321,15 +326,11 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 if ((chatType == "group" || chatType == "supergroup") && text[0] != '/') {
                     return;
                 }
-
-                // 处理 /collect 命令
                 if (command == "/collect" && message.contains("reply_to_message")) {
                     const auto& replyMessage = message["reply_to_message"];
                     collectFile(chatId, userId, message["from"].value("username", "unknown"), replyMessage);
                     return;
                 }
-
-                // 处理 /remove 命令
                 if (command == "/remove") {
                     int page = 1;
                     if (text.length() > 7) {
@@ -342,16 +343,11 @@ void Bot::processUpdate(const nlohmann::json& update) {
                     listRemovableFiles(chatId, userId, page, 10);
                     return;
                 }
-
-
-                // 处理 /ban 命令
                 if (command == "/ban" && isOwner(userId)) {
                     // banUser(chatId, message["reply_to_message"]);
                     listUsersForBan(chatId, 1, 10, "");
                     return;
                 }
-
-                // 处理 /my 命令
                 if (command.rfind("/my", 0) == 0) {
                     int page = 1;
                     if (text.length() > 4) {
@@ -364,8 +360,6 @@ void Bot::processUpdate(const nlohmann::json& update) {
                     listMyFiles(chatId, userId, page);
                     return;
                 }
-
-                // 处理 /openregister 和 /closeregister 命令
                 if (isOwner(userId)) {
                     if (command == "/openregister") {
                         openRegister(chatId);
@@ -377,8 +371,6 @@ void Bot::processUpdate(const nlohmann::json& update) {
                     }
                 }
             }
-
-            // 私人聊天中处理文件类型
             if (chatType == "private") {
                 handleFileAndSend(chatId, userId, baseUrl, message, message["from"].value("username", "unknown"));
             }
