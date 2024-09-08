@@ -22,6 +22,25 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 std::map<std::string, int> requestCounts;
 std::map<std::string, std::chrono::steady_clock::time_point> requestTimestamps;
 
+// 获取客户端真实 IP 地址
+std::string getClientIp(const httplib::Request& req) {
+    // 检查反向代理头
+    if (req.has_header("X-Forwarded-For")) {
+        std::string forwardedFor = req.get_header_value("X-Forwarded-For");
+        // 如果有多个 IP，获取第一个（即原始客户端 IP）
+        size_t commaPos = forwardedFor.find(',');
+        if (commaPos != std::string::npos) {
+            return forwardedFor.substr(0, commaPos);
+        }
+        return forwardedFor;
+    }
+    if (req.has_header("X-Real-IP")) {
+        return req.get_header_value("X-Real-IP");
+    }
+    // 如果没有反向代理头，则使用直接连接的 IP
+    return req.remote_addr;
+}
+
 // 限流检查
 bool checkRateLimit(const std::string& clientIp, int maxRequests) {
     auto now = std::chrono::steady_clock::now();
@@ -42,6 +61,7 @@ bool checkRateLimit(const std::string& clientIp, int maxRequests) {
 bool checkReferer(const httplib::Request& req, const std::vector<std::string>& allowedReferers) {
     if (!req.has_header("Referer")) return false;
     std::string referer = req.get_header_value("Referer");
+    log(LogLevel::INFO,"Request referer: " + referer);
     for (const auto& allowed : allowedReferers) {
         if (referer.find(allowed) != std::string::npos) {
             return true;
@@ -60,8 +80,10 @@ std::string loadTemplate(const std::string& filepath) {
 }
 
 // 统一处理媒体请求
-void handleMediaRequest(const httplib::Request& req, httplib::Response& res, const std::string& clientIp, const Config& config, const std::function<void(const httplib::Request&, httplib::Response&)>& handler) {
+void handleMediaRequest(const httplib::Request& req, httplib::Response& res, const Config& config, const std::function<void(const httplib::Request&, httplib::Response&)>& handler) {
+    std::string clientIp = getClientIp(req);
     if (!checkRateLimit(clientIp, config.getRateLimitRequestsPerMinute())) {
+        log(LogLevel::INFO,"IP:" + clientIp + " 已超过一分钟内最大请求次数，已限制请求");
         res.set_content("Too many requests", "text/plain");
         res.status = 429;
         return;
@@ -102,19 +124,19 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
 
     // 为五个路由设置通用的限流和 referer 验证
     svr->Get(R"(/images/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, req.remote_addr, config, mediaRequestHandler);
+        handleMediaRequest(req, res, config, mediaRequestHandler);
     });
     svr->Get(R"(/files/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, req.remote_addr, config, mediaRequestHandler);
+        handleMediaRequest(req, res, config, mediaRequestHandler);
     });
     svr->Get(R"(/videos/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, req.remote_addr, config, mediaRequestHandler);
+        handleMediaRequest(req, res, config, mediaRequestHandler);
     });
     svr->Get(R"(/audios/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, req.remote_addr, config, mediaRequestHandler);
+        handleMediaRequest(req, res, config, mediaRequestHandler);
     });
     svr->Get(R"(/stickers/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, req.remote_addr, config, mediaRequestHandler);
+        handleMediaRequest(req, res, config, mediaRequestHandler);
     });
 
     // Webhook 路由
