@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "httplib.h"
 #include "bot.h"
+#include "db_manager.h"
 #include <memory>
 #include <fstream>
 #include <vector>
@@ -54,24 +55,24 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         svr = make_unique<httplib::Server>();
     }
 
-    svr->Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
+    svr->Get(R"(/images/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
     });
 
-    svr->Get(R"(/files/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
+    svr->Get(R"(/files/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
     });
 
-    svr->Get(R"(/videos/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
+    svr->Get(R"(/videos/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
     });
 
-    svr->Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
+    svr->Get(R"(/audios/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
     });
 
-    svr->Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl);
+    svr->Get(R"(/stickers/([^\s/]+))", [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
     });
 
     svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {
@@ -136,17 +137,53 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         res.set_content(html, "text/html");
     });
 
-    svr->Get("/", [&cacheManager](const httplib::Request& req, httplib::Response& res) {
-        std::vector<std::string> images = {"image1.jpg", "image2.png", "image3.gif"};
-        std::string galleryHtml = generateImageGallery(images);
+svr->Get("/", [](const httplib::Request& req, httplib::Response& res) {
+    DBManager dbManager("bot_database.db");
 
-        std::string html = loadTemplate("templates/index.html");
-        size_t pos = html.find("{{gallery}}");
-        if (pos != std::string::npos) {
-            html.replace(pos, 11, galleryHtml);
+    // 获取当前的分页数（默认为 1）
+    int page = 1;
+    if (req.has_param("page")) {
+        page = std::stoi(req.get_param_value("page"));
+    }
+    int pageSize = 10; // 每页显示 10 个文件
+
+    // 从数据库中获取图片和视频文件，并查询 extension 字段
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> mediaFiles = dbManager.getImagesAndVideos(page, pageSize);
+
+    // 生成 HTML 代码
+    std::string galleryHtml;
+    for (const auto& media : mediaFiles) {
+        // const std::string& fileId = std::get<0>(media);
+        const std::string& fileName = std::get<1>(media);
+        const std::string& fileLink = std::get<2>(media);
+        const std::string& extension = std::get<3>(media);
+
+        // 判断是图片还是视频
+        std::string mediaType = (extension == ".mp4" || extension == ".mkv" || extension == ".avi" || extension == ".mov") ? "video" : "image";
+
+        galleryHtml += "<div class=\"media-item\">";
+        if (mediaType == "image") {
+            galleryHtml += "<img src=\"" + fileLink + "\" alt=\"" + fileName + "\" class=\"media-preview\">";
+        } else if (mediaType == "video") {
+            galleryHtml += "<video controls class=\"media-preview\">";
+            galleryHtml += "<source src=\"" + fileLink + "\" type=\"video/" + extension + "\">";
+            galleryHtml += "Your browser does not support the video tag.";
+            galleryHtml += "</video>";
         }
-        res.set_content(html, "text/html");
+        galleryHtml += "<div class=\"media-name\">" + fileName + "</div>";
+        galleryHtml += "</div>";
+    }
+
+    std::string html = loadTemplate("templates/index.html");
+    size_t pos = html.find("{{gallery}}");
+    if (pos != std::string::npos) {
+        html.replace(pos, 11, galleryHtml);
+    }
+
+    res.set_content(html, "text/html");
     });
+
+
 
     std::future<void> serverFuture = pool.enqueue([&svr, hostname, port]() {
         log(LogLevel::INFO,"Server thread running on port: " + std::to_string(port));

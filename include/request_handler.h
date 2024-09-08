@@ -5,6 +5,8 @@
 #include <map>
 #include <httplib.h>
 #include "image_cache_manager.h"
+#include "db_manager.h"
+#include "config.h"
 
 // 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType);
@@ -19,6 +21,8 @@ size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Respon
 void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType);
 
 // 处理图片、非视频和非文档文件的缓存请求
-void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl);
+void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl, const Config& config);
+
+std::string getBaseUrl(const std::string& url);
 
 #endif

@@ -1,6 +1,8 @@
 #include "request_handler.h"
 #include "http_client.h"
 #include "utils.h"
+#include "config.h"
+#include "db_manager.h"
 #include <nlohmann/json.hpp>
 #include <regex>
 #include <curl/curl.h>
@@ -55,7 +57,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 }
 
 // 处理图片、非视频和非文档文件的缓存请求
-void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl) {
+void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl, const Config& config) {
     log(LogLevel::INFO,"Received request for image.");
 
     if (req.matches.size() < 2) {
@@ -93,6 +95,11 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
             log(LogLevel::INFO,"File path obtained: " + filePath);
 
             std::string mimeType = getMimeType(filePath, mimeTypes);
+            std::string path = req.path;
+            std::string baseUrl = getBaseUrl(config.getWebhookUrl());
+            // 保存到库里
+            DBManager dbManager("bot_database.db");
+            dbManager.addFile("unknown", fileId, baseUrl + path, "文件", extension);
 
             // 检查是否是视频或文档类型，不缓存，直接流式传输
             if (mimeType.find("video") != std::string::npos || mimeType.find("application") != std::string::npos) {
@@ -133,4 +140,13 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         res.set_content("Internal Server Error", "text/plain");
         log(LogLevel::LOGERROR,"Error processing request for file ID: " + fileId + " - " + std::string(e.what()));
     }
+}
+
+std::string getBaseUrl(const std::string& url) {
+    std::regex urlRegex(R"((https?:\/\/[^\/:]+(:\d+)?))");
+    std::smatch match;
+    if (std::regex_search(url, match, urlRegex)) {
+        return match.str(0);
+    }
+    return "";
 }
