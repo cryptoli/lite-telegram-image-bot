@@ -7,8 +7,9 @@
 #include "thread_pool.h"
 #include "bot.h"
 #include "db_manager.h"
+#include "CacheManager.h"
 
 
-void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot);
+void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter);
 
 #endif

@@ -1,6 +1,7 @@
 CXX = g++
 
-CXXFLAGS = -std=c++11 -Wall -I$(INCDIR)
+# 开启优化选项 -O2 和并行编译的预处理指令
+CXXFLAGS = -std=c++11 -Wall -O2 -I$(INCDIR)
 
 ifeq ($(OS),Windows_NT)
     CXXFLAGS += -pthread -I/mingw64/include
@@ -19,6 +20,7 @@ INCDIR = include
 SRC = $(wildcard $(SRCDIR)/*.cpp)
 OBJ = $(SRC:.cpp=.o)
 
+# 使用 -j 选项并行编译，推荐使用: make -j$(nproc) 自动并行
 all: $(TARGET)
 
 $(TARGET): $(OBJ)

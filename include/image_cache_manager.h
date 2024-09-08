@@ -170,55 +170,64 @@ private:
     }
 
     void cleanUpOldFiles() {
-        while (!stopCleaner) {
-            std::this_thread::sleep_for(std::chrono::seconds(600)); // 每600秒检查一次
+    while (!stopCleaner) {
+        std::this_thread::sleep_for(std::chrono::seconds(600)); // 每6秒检查一次
+        log(LogLevel::INFO, "Check cache file state...");
 
-            std::lock_guard<std::mutex> lock(cacheMutex);
+        std::lock_guard<std::mutex> lock(cacheMutex);
 
-            auto now = std::chrono::system_clock::now();
-            size_t currentCacheSize = getCacheSize();
+        auto now = std::chrono::system_clock::now();
+        size_t currentCacheSize = getCacheSize();
+        
+        log(LogLevel::INFO, "Current cache size: " + std::to_string(currentCacheSize));
+        log(LogLevel::INFO, "Number of files in lastAccessTimes: " + std::to_string(lastAccessTimes.size()));
 
-            for (auto it = lastAccessTimes.begin(); it != lastAccessTimes.end();) {
-                std::string filePath = getCacheFilePath(it->first, ".cache");
+        for (auto it = lastAccessTimes.begin(); it != lastAccessTimes.end();) {
+            std::string filePath = getCacheFilePath(it->first, "");
+            log(LogLevel::INFO, "Check file: " + filePath);
 
-                if (fileExists(filePath)) {
-                    auto fileAge = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+            if (fileExists(filePath)) {
+                auto fileAge = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+                log(LogLevel::INFO, "File age: " + std::to_string(fileAge) + " seconds");
 
-                    // 删除长时间未访问的文件
-                    if (fileAge > maxCacheAgeSeconds) {
-                        remove(filePath.c_str());
-                        it = lastAccessTimes.erase(it);
-                        log(LogLevel::INFO, "Removed old cached image: " + filePath);
-                    } else {
-                        ++it;
-                    }
-                } else {
+                // 删除长时间未访问的文件
+                if (fileAge > maxCacheAgeSeconds) {
+                    remove(filePath.c_str());
                     it = lastAccessTimes.erase(it);
-                }
-            }
-
-            // 检查磁盘使用情况并清理缓存
-            while (currentCacheSize > maxDiskUsageBytes) {
-                auto oldest = std::min_element(lastAccessTimes.begin(), lastAccessTimes.end(),
-                    [](const std::pair<const std::string, std::chrono::system_clock::time_point>& lhs,
-                       const std::pair<const std::string, std::chrono::system_clock::time_point>& rhs) {
-                        return lhs.second < rhs.second;
-                    });
-
-                if (oldest != lastAccessTimes.end()) {
-                    std::string oldestFilePath = getCacheFilePath(oldest->first, ".cache");
-                    if (fileExists(oldestFilePath)) {
-                        currentCacheSize -= getFileSize(oldestFilePath);
-                        remove(oldestFilePath.c_str());
-                        lastAccessTimes.erase(oldest);
-                        log(LogLevel::INFO, "Removed image due to disk space limit: " + oldestFilePath);
-                    }
+                    log(LogLevel::INFO, "Removed old cached image: " + filePath);
                 } else {
-                    break;
+                    ++it;
                 }
+            } else {
+                log(LogLevel::INFO, "File not found, removing from lastAccessTimes: " + filePath);
+                it = lastAccessTimes.erase(it);
+            }
+        }
+
+        // 检查磁盘使用情况并清理缓存
+        while (currentCacheSize > maxDiskUsageBytes) {
+            log(LogLevel::INFO, "Cache size exceeds limit, starting removal...");
+            auto oldest = std::min_element(lastAccessTimes.begin(), lastAccessTimes.end(),
+                [](const std::pair<const std::string, std::chrono::system_clock::time_point>& lhs,
+                   const std::pair<const std::string, std::chrono::system_clock::time_point>& rhs) {
+                    return lhs.second < rhs.second;
+                });
+
+            if (oldest != lastAccessTimes.end()) {
+                std::string oldestFilePath = getCacheFilePath(oldest->first, "");
+                if (fileExists(oldestFilePath)) {
+                    log(LogLevel::INFO, "Removing file due to disk space limit: " + oldestFilePath);
+                    currentCacheSize -= getFileSize(oldestFilePath);
+                    remove(oldestFilePath.c_str());
+                    lastAccessTimes.erase(oldest);
+                }
+            } else {
+                break;
             }
         }
     }
+}
+
 
     size_t getFileSize(const std::string& path) {
 #ifdef _WIN32

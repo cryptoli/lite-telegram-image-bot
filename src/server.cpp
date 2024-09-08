@@ -5,6 +5,7 @@
 #include "httplib.h"
 #include "bot.h"
 #include "db_manager.h"
+#include "CacheManager.h"
 #include <memory>
 #include <fstream>
 #include <vector>
@@ -18,16 +19,10 @@ std::unique_ptr<T> make_unique(Args&&... args) {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-// 全局变量用于限流
-std::map<std::string, int> requestCounts;
-std::map<std::string, std::chrono::steady_clock::time_point> requestTimestamps;
-
 // 获取客户端真实 IP 地址
 std::string getClientIp(const httplib::Request& req) {
-    // 检查反向代理头
     if (req.has_header("X-Forwarded-For")) {
         std::string forwardedFor = req.get_header_value("X-Forwarded-For");
-        // 如果有多个 IP，获取第一个（即原始客户端 IP）
         size_t commaPos = forwardedFor.find(',');
         if (commaPos != std::string::npos) {
             return forwardedFor.substr(0, commaPos);
@@ -37,37 +32,31 @@ std::string getClientIp(const httplib::Request& req) {
     if (req.has_header("X-Real-IP")) {
         return req.get_header_value("X-Real-IP");
     }
-    // 如果没有反向代理头，则使用直接连接的 IP
     return req.remote_addr;
 }
 
-// 限流检查
-bool checkRateLimit(const std::string& clientIp, int maxRequests) {
-    auto now = std::chrono::steady_clock::now();
-    auto& timestamp = requestTimestamps[clientIp];
-    auto& count = requestCounts[clientIp];
-
-    // 超过 60 秒，重置计数器
-    if (std::chrono::duration_cast<std::chrono::seconds>(now - timestamp).count() > 60) {
-        count = 0;
-        timestamp = now;
+// 统一处理媒体请求
+void handleMediaRequest(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager, const std::function<void(const httplib::Request&, httplib::Response&)>& handler) {
+    std::string clientIp = getClientIp(req);
+    
+    // 使用 CacheManager 处理限流
+    if (!cacheManager.checkRateLimit(clientIp, config.getRateLimitRequestsPerMinute())) {
+        log(LogLevel::INFO,"IP:" + clientIp + " 已超过一分钟内最大请求次数，已限制请求");
+        res.set_content("Too many requests", "text/plain");
+        res.status = 429;
+        return;
     }
 
-    count++;
-    return count <= maxRequests;
-}
-
-// Referer 验证
-bool checkReferer(const httplib::Request& req, const std::vector<std::string>& allowedReferers) {
-    if (!req.has_header("Referer")) return false;
-    std::string referer = req.get_header_value("Referer");
-    log(LogLevel::INFO,"Request referer: " + referer);
-    for (const auto& allowed : allowedReferers) {
-        if (referer.find(allowed) != std::string::npos) {
-            return true;
+    if (config.enableReferers() && req.has_header("Referer")) {
+        std::string referer = req.get_header_value("Referer");
+        if (!cacheManager.checkReferer(referer, config.getAllowedReferers())) {
+            res.set_content("Forbidden", "text/plain");
+            res.status = 403;
+            return;
         }
     }
-    return false;
+
+    handler(req, res);  // 调用实际处理函数
 }
 
 // 加载模板文件
@@ -79,26 +68,7 @@ std::string loadTemplate(const std::string& filepath) {
     return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 }
 
-// 统一处理媒体请求
-void handleMediaRequest(const httplib::Request& req, httplib::Response& res, const Config& config, const std::function<void(const httplib::Request&, httplib::Response&)>& handler) {
-    std::string clientIp = getClientIp(req);
-    if (!checkRateLimit(clientIp, config.getRateLimitRequestsPerMinute())) {
-        log(LogLevel::INFO,"IP:" + clientIp + " 已超过一分钟内最大请求次数，已限制请求");
-        res.set_content("Too many requests", "text/plain");
-        res.status = 429;
-        return;
-    }
-
-    if (config.enableReferers() && !checkReferer(req, config.getAllowedReferers())) {
-        res.set_content("Forbidden", "text/plain");
-        res.status = 403;
-        return;
-    }
-
-    handler(req, res);  // 调用实际处理函数
-}
-
-void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot) {
+void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter) {
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
     std::string secretToken = config.getSecretToken();
@@ -123,20 +93,20 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     };
 
     // 为五个路由设置通用的限流和 referer 验证
-    svr->Get(R"(/images/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, mediaRequestHandler);
+    svr->Get(R"(/images/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
-    svr->Get(R"(/files/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, mediaRequestHandler);
+    svr->Get(R"(/files/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
-    svr->Get(R"(/videos/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, mediaRequestHandler);
+    svr->Get(R"(/videos/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
-    svr->Get(R"(/audios/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, mediaRequestHandler);
+    svr->Get(R"(/audios/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
-    svr->Get(R"(/stickers/([^\s/]+))", [&config, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, mediaRequestHandler);
+    svr->Get(R"(/stickers/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
 
     // Webhook 路由
