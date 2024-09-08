@@ -57,7 +57,7 @@ lite-telegram-image-bot/
 ### 1. 克隆项目
 
 ```bash
-git https://github.com/cryptoli/lite-telegram-image-bot.git
+git clone https://github.com/cryptoli/lite-telegram-image-bot.git
 cd lite-telegram-image-bot
 ```
 
