@@ -56,14 +56,36 @@ size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Respon
 void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType) {
     CURL* curl = curl_easy_init();
     if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());  // 设置要请求的文件下载 URL
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);  // 设置回调函数，流式传输数据
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将数据写入响应
-        curl_easy_perform(curl);  // 执行请求
-        curl_easy_cleanup(curl);  // 清理 curl 资源
+        curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
+
+        // 启用 HTTP Keep-Alive
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
+
+        // 增加缓冲区大小
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);
+
+        // 设置请求超时
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+
+        // 设置分块传输
+        // res.set_header("Transfer-Encoding", "chunked");
+
+        // 设置回调函数，流式传输数据
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+
+        // 执行请求
+        curl_easy_perform(curl);
+
+        // 清理 curl 资源
+        curl_easy_cleanup(curl);
     }
-    res.set_header("Content-Type", mimeType);  // 设置 MIME 类型
-    res.set_header("Accept-Ranges", "bytes");  // 告诉浏览器支持分段下载
+    
+    res.set_header("Content-Type", mimeType);
+    res.set_header("Accept-Ranges", "bytes");  // 支持分段下载
 }
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, const std::string& telegramApiUrl, const Config& config) {
