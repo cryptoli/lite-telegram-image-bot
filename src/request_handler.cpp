@@ -6,17 +6,27 @@
 #include <nlohmann/json.hpp>
 #include <regex>
 #include <curl/curl.h>
+#include <algorithm>
 
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
     try {
+        // 查找文件扩展名
         size_t pos = filePath.find_last_of(".");
-        if (pos == std::string::npos || pos == filePath.length() - 1) {
-            return defaultMimeType;
+        std::string extension;
+        
+        if (pos != std::string::npos && pos != filePath.length() - 1) {
+            extension = filePath.substr(pos);
+            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
         }
-
-        std::string extension = filePath.substr(pos);
+        if (extension.empty()) {
+            if (filePath.find("photo") != std::string::npos) {
+                return "image/jpeg";
+            }
+            if (filePath.find("video") != std::string::npos) {
+                return "video/mp4";
+            }
+        }
         auto it = mimeTypes.find(extension);
-
         if (it != mimeTypes.end()) {
             return it->second;
         } else {
