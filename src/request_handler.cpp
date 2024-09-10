@@ -8,6 +8,7 @@
 #include <curl/curl.h>
 #include <algorithm>
 #include <future>
+#include <sstream>
 
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
     try {
@@ -46,47 +47,72 @@ std::string getFileExtension(const std::string& filePath) {
     return ""; // No extension found
 }
 
-// 流式传输回调函数
+// 处理流式传输的回调函数，支持分段传输
 size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Response* res) {
     size_t totalSize = size * nmemb;
-    res->body.append(static_cast<char*>(ptr), totalSize);
+    
+    // 直接向客户端流式发送响应
+    if (totalSize > 0) {
+        res->body.append(static_cast<char*>(ptr), totalSize);
+    }
     return totalSize;
 }
 
-// 处理视频和文档的直接流式传输（不缓存）
+// 处理视频文件的流式传输，支持分段请求
 void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType) {
     CURL* curl = curl_easy_init();
-    if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
-
-        // 启用 HTTP Keep-Alive
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
-
-        // 增加缓冲区大小
-        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);
-
-        // 设置请求超时
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-
-        // 设置分块传输
-        // res.set_header("Transfer-Encoding", "chunked");
-
-        // 设置回调函数，流式传输数据
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
-
-        // 执行请求
-        curl_easy_perform(curl);
-
-        // 清理 curl 资源
-        curl_easy_cleanup(curl);
+    if (!curl) {
+        res.status = 500;
+        res.set_content("Failed to initialize CURL", "text/plain");
+        return;
     }
+
+    curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
+
+    // 启用 HTTP Keep-Alive
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
+
+    // 增加缓冲区大小
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);
+
+    // 设置请求超时
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+
+    // 设置回调函数，流式传输数据
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+
+    // 处理分段请求（Range 请求）
+    if (req.has_header("Range")) {
+        std::string rangeHeader = req.get_header_value("Range");
+        curl_easy_setopt(curl, CURLOPT_RANGE, rangeHeader.c_str());
+    }
+
+    // 执行请求
+    CURLcode res_code = curl_easy_perform(curl);
     
+    if (res_code != CURLE_OK) {
+        log(LogLevel::LOGERROR, "CURL error: " + std::string(curl_easy_strerror(res_code)));
+        res.status = 500;
+        res.set_content("Failed to stream file", "text/plain");
+    }
+
+    // 获取文件总大小并设置头信息
+    curl_off_t contentLength = 0;
+    curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength);
+
+    std::ostringstream contentLengthStr;
+    contentLengthStr << static_cast<int64_t>(contentLength);
+    res.set_header("Content-Length", contentLengthStr.str());
+    
+    // 设置视频文件类型和支持分段下载
     res.set_header("Content-Type", mimeType);
     res.set_header("Accept-Ranges", "bytes");  // 支持分段下载
+
+    curl_easy_cleanup(curl);
 }
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config) {
