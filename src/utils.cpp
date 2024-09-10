@@ -6,6 +6,7 @@
 #include <sstream>
 #include <zlib.h>
 #include <vector>
+#include <cstring>
 
 std::string logLevelToString(LogLevel level) {
     switch (level) {
