@@ -47,13 +47,25 @@ void handleMediaRequest(const httplib::Request& req, httplib::Response& res, con
         return;
     }
 
-    if (config.enableReferers() && req.has_header("Referer")) {
-        std::string referer = req.get_header_value("Referer");
-        if (!cacheManager.checkReferer(referer, config.getAllowedReferers())) {
-            res.set_content("Forbidden", "text/plain");
-            res.status = 403;
-            return;
-        }
+    if (config.enableReferers()) {
+    // 检查是否存在 Referer 头
+    if (!req.has_header("Referer")) {
+        log(LogLevel::INFO, "No Referer provided. Access denied.");
+        res.set_content("Forbidden", "text/plain");
+        res.status = 403;
+        return;
+    }
+
+    // 获取 Referer 并进行验证
+    std::string referer = req.get_header_value("Referer");
+
+    // 检查 Referer 是否在允许的范围内
+    if (!cacheManager.checkReferer(referer, config.getAllowedReferers())) {
+        log(LogLevel::INFO, "Invalid Referer. Access denied.");
+        res.set_content("Forbidden", "text/plain");
+        res.status = 403;
+        return;
+    }
     }
 
     handler(req, res);  // 调用实际处理函数
