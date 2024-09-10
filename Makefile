@@ -1,14 +1,15 @@
 CXX = g++
 
-CXXFLAGS = -std=c++11 -Wall -I$(INCDIR)
+# 开启优化选项 -O2 和并行编译的预处理指令
+CXXFLAGS = -std=c++11 -Wall -O2 -I$(INCDIR)
 
 ifeq ($(OS),Windows_NT)
     CXXFLAGS += -pthread -I/mingw64/include
-    LDFLAGS = -L/mingw64/lib -lcurl -lssl -lcrypto -lws2_32 -pthread -lsqlite3
+    LDFLAGS = -L/mingw64/lib -lcurl -lssl -lcrypto -lws2_32 -pthread -lsqlite3 -lz
     RM = cmd /C del /Q
 else
     CXXFLAGS += -pthread
-    LDFLAGS = -lcurl -lssl -lcrypto -pthread -lsqlite3
+    LDFLAGS = -lcurl -lssl -lcrypto -pthread -lsqlite3 -lz
     RM = rm -f
 endif
 

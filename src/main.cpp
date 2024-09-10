@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "http_client.h"
 #include "db_manager.h"
+#include "CacheManager.h"
 #include <thread>
 #include <chrono>
 
@@ -49,6 +50,9 @@ int main(int argc, char* argv[]) {
     // 创建 ImageCacheManager 实例，使用配置文件中的参数
     ImageCacheManager cacheManager("cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
 
+    // 创建并启动缓存管理器（在单独的线程中运行）
+    CacheManager cacheManagerSystem(100, 60);  // 最大缓存大小100，清理间隔60秒
+
     // 创建 Bot 实例
     Bot bot(apiToken);
 
@@ -60,11 +64,14 @@ int main(int argc, char* argv[]) {
 
     // 启动服务器，在一个单独的线程中运行
     std::thread serverThread([&]() {
-        startServer(config, cacheManager, pool, bot);
+        startServer(config, cacheManager, pool, bot, cacheManagerSystem);
     });
 
     // 服务器线程在程序退出前正确关闭
     serverThread.join();
+
+    // 停止缓存管理线程
+    cacheManagerSystem.stopCleanupThread();
 
     return 0;
 }

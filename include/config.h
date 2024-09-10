@@ -22,6 +22,10 @@ public:
     std::string getSecretToken() const;
     std::string getOwnerId() const;
     std::string getTelegramApiUrl() const;
+    bool enableReferers() const;
+    std::vector<std::string> getAllowedReferers() const;
+    int getRateLimitRequestsPerMinute() const;
+
 
 private:
     nlohmann::json configData;

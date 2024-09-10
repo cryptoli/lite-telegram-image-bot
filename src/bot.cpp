@@ -17,7 +17,7 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
         {"document", "files", "📄", "文件"},
         {"video", "videos", "🎥", "视频"},
         {"audio", "audios", "🎵", "音频"},
-        {"animation", "gifs", "🎬", "GIF"},
+        // {"animation", "gifs", "🎬", "GIF"},
         {"sticker", "stickers", "📝", "贴纸"}
     };
 
@@ -71,7 +71,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
     // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, username)) {
-        dbManager.addFile(userId, fileId, customUrl, fileName);
+        dbManager.addFile(userId, fileId, customUrl, fileName, "");
         sendMessage(chatId, formattedMessage);  // 确保在这里发送消息
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");

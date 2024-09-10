@@ -21,7 +21,7 @@ public:
     bool isUserRegistered(const std::string& telegramId);
 
     // 添加文件记录
-    bool addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName);
+    bool addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName, const std::string& extension);
 
     // 删除文件记录
     bool removeFile(const std::string& userId, const std::string& fileName);
@@ -43,6 +43,7 @@ public:
     int getTotalUserCount();
     std::vector<std::tuple<std::string, std::string, bool>> getUsersForBan(int page, int pageSize);
     bool isUserBanned(const std::string& telegramId);
+    std::vector<std::tuple<std::string, std::string, std::string, std::string>> getImagesAndVideos(int page, int pageSize);
 
 private:
     static sqlite3* sharedDb;

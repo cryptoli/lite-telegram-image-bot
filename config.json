@@ -58,5 +58,12 @@
     "cache": {
         "max_size_mb": 100,
         "max_age_seconds": 3600
+    },
+    "security": {
+        "enable_referers": false,
+        "allowed_referers": ["yourdomain.com", "anotherdomain.com"],
+        "rate_limit": {
+            "requests_per_minute": 60
+        }
     }
 }

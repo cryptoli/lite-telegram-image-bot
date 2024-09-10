@@ -10,6 +10,7 @@ enum class LogLevel {
 };
 
 void log(LogLevel level, const std::string& message);
+std::string gzipCompress(const std::string& data);
 
 #endif
 
