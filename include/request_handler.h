@@ -25,5 +25,6 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager,CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config);
 
 std::string getBaseUrl(const std::string& url);
+void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req);
 
 #endif

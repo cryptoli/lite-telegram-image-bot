@@ -7,6 +7,7 @@
 #include <regex>
 #include <curl/curl.h>
 #include <algorithm>
+#include <future>
 
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
     try {
@@ -115,6 +116,9 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     std::string cachedFilePath;
     bool isMemoryCacheHit = memoryCache.getFilePathCache(fileId, cachedFilePath);
 
+    // 减少文件传输体积：判断是否支持 WebP 格式
+    std::string preferredExtension = (req.has_header("Accept") && req.get_header_value("Accept").find("image/webp") != std::string::npos) ? "webp" : "";
+
     if (!isMemoryCacheHit) {
         log(LogLevel::INFO, "Memory cache miss. Requesting file information from Telegram for file ID: " + fileId);
 
@@ -138,7 +142,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
             memoryCache.addFilePathCache(fileId, filePath, 3600);
 
             // 获取文件扩展名
-            std::string extension = getFileExtension(filePath);
+            std::string extension = preferredExtension.empty() ? getFileExtension(filePath) : preferredExtension;
 
             // Step 2: 根据 filePath 从 Telegram 下载文件并缓存
             std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + filePath;
@@ -151,12 +155,14 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
                 return;
             }
 
-            // 将下载的文件存入 image 缓存
-            cacheManager.cacheImage(fileId, fileData, extension);
+            // 异步将文件缓存到磁盘
+            std::async(std::launch::async, [&cacheManager, fileId, fileData, extension]() {
+                cacheManager.cacheImage(fileId, fileData, extension);
+            });
 
-            // 返回文件
+            // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
             std::string mimeType = getMimeType(filePath, mimeTypes);
-            res.set_content(fileData, mimeType);
+            setHttpResponse(res, fileData, mimeType, req);
             log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
         } else {
             res.status = 404;
@@ -168,7 +174,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         log(LogLevel::INFO, "File path cache hit for file ID: " + fileId);
 
         // 如果缓存命中，使用缓存的 filePath 进行文件下载
-        std::string extension = getFileExtension(cachedFilePath);
+        std::string extension = preferredExtension.empty() ? getFileExtension(cachedFilePath) : preferredExtension;
 
         std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
         std::string fileData = sendHttpRequest(telegramFileDownloadUrl);
@@ -180,13 +186,29 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
             return;
         }
 
-        // 将下载的文件存入缓存
-        cacheManager.cacheImage(fileId, fileData, extension);
+        // 异步将文件缓存到磁盘
+        std::async(std::launch::async, [&cacheManager, fileId, fileData, extension]() {
+            cacheManager.cacheImage(fileId, fileData, extension);
+        });
 
-        // 返回文件
+        // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
         std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
-        res.set_content(fileData, mimeType);
+        setHttpResponse(res, fileData, mimeType, req);
         log(LogLevel::INFO, "Successfully served cached file for file ID: " + fileId);
+    }
+}
+
+void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req) {
+    // 添加 HTTP 缓存控制头
+    res.set_header("Cache-Control", "max-age=3600");
+
+    // 检查客户端是否支持 Gzip 压缩
+    if (req.has_header("Accept-Encoding") && req.get_header_value("Accept-Encoding").find("gzip") != std::string::npos) {
+        std::string compressedData = gzipCompress(fileData);
+        res.set_content(compressedData, mimeType);
+        res.set_header("Content-Encoding", "gzip");
+    } else {
+        res.set_content(fileData, mimeType);
     }
 }
 

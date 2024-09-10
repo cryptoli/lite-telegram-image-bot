@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <ctime>
 #include <sstream>
+#include <zlib.h>
+#include <vector>
 
 std::string logLevelToString(LogLevel level) {
     switch (level) {
@@ -50,4 +52,48 @@ void log(LogLevel level, const std::string& message) {
 
     // 同时输出到控制台
     std::cout << formattedMessage << std::endl;
+}
+
+// Gzip 压缩实现
+std::string gzipCompress(const std::string& data) {
+    if (data.empty()) {
+        return std::string();
+    }
+
+    // 定义缓冲区大小
+    const size_t BUFSIZE = 128 * 1024;  // 128KB
+    std::vector<char> buffer(BUFSIZE);
+
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+
+    if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        throw std::runtime_error("deflateInit2 failed while compressing.");
+    }
+
+    zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data.data()));
+    zs.avail_in = static_cast<uInt>(data.size());
+
+    int ret;
+    std::string output;
+
+    // 压缩数据
+    do {
+        zs.next_out = reinterpret_cast<Bytef*>(buffer.data());
+        zs.avail_out = buffer.size();
+
+        ret = deflate(&zs, Z_FINISH);
+
+        if (output.size() < zs.total_out) {
+            output.append(buffer.data(), zs.total_out - output.size());
+        }
+    } while (ret == Z_OK);
+
+    deflateEnd(&zs);
+
+    if (ret != Z_STREAM_END) {
+        throw std::runtime_error("deflate failed while compressing.");
+    }
+
+    return output;
 }
