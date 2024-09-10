@@ -26,6 +26,8 @@ public:
 
     // 获取缓存
     bool getCache(const std::string& key, std::string& data);
+    void addFilePathCache(const std::string& fileId, const std::string& filePath, int ttlSeconds);
+    bool getFilePathCache(const std::string& fileId, std::string& filePath);
 
     // 删除缓存
     void deleteCache(const std::string& key);
@@ -48,6 +50,7 @@ private:
     std::unordered_map<std::string, CacheItem> cacheMap;
     std::unordered_map<std::string, int> requestCounts;
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> requestTimestamps;
+    std::unordered_map<std::string, CacheItem> fileExtensionCache;
 
     std::mutex cacheMutex;
     size_t maxCacheSize;

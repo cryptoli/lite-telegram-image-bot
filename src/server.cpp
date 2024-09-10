@@ -88,8 +88,8 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     }
 
     // 定义一个通用的媒体请求处理函数
-    auto mediaRequestHandler = [&apiToken, &mimeTypes, &cacheManager, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, telegramApiUrl, config);
+    auto mediaRequestHandler = [&apiToken, &mimeTypes, &cacheManager, &rateLimiter, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config);
     };
 
     // 为五个路由设置通用的限流和 referer 验证

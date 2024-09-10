@@ -17,7 +17,7 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
         {"document", "files", "📄", "文件"},
         {"video", "videos", "🎥", "视频"},
         {"audio", "audios", "🎵", "音频"},
-        {"animation", "gifs", "🎬", "GIF"},
+        // {"animation", "gifs", "🎬", "GIF"},
         {"sticker", "stickers", "📝", "贴纸"}
     };
 

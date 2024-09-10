@@ -33,6 +33,26 @@ bool CacheManager::getCache(const std::string& key, std::string& data) {
     return false;
 }
 
+void CacheManager::addFilePathCache(const std::string& fileId, const std::string& filePath, int ttlSeconds) {
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(ttlSeconds);
+    fileExtensionCache[fileId] = {filePath, expirationTime};  // 存储文件后缀缓存
+}
+
+bool CacheManager::getFilePathCache(const std::string& fileId, std::string& filePath) {
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    auto it = fileExtensionCache.find(fileId);
+    if (it != fileExtensionCache.end()) {
+        if (std::chrono::steady_clock::now() > it->second.expirationTime) {
+            fileExtensionCache.erase(it);
+            return false;
+        }
+        filePath = it->second.data;
+        return true;
+    }
+    return false;
+}
+
 // 删除缓存
 void CacheManager::deleteCache(const std::string& key) {
     std::lock_guard<std::mutex> lock(cacheMutex);
@@ -86,13 +106,21 @@ void CacheManager::cleanupExpiredRateLimitData() {
 
 // 清理过期缓存
 void CacheManager::cleanupExpiredCache() {
-    // std::lock_guard<std::mutex> lock(cacheMutex);
+    auto now = std::chrono::steady_clock::now();
     
     // 清理缓存数据
-    auto now = std::chrono::steady_clock::now();
     for (auto it = cacheMap.begin(); it != cacheMap.end();) {
         if (now > it->second.expirationTime) {
             it = cacheMap.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    // 清理文件后缀缓存
+    for (auto it = fileExtensionCache.begin(); it != fileExtensionCache.end();) {
+        if (now > it->second.expirationTime) {
+            it = fileExtensionCache.erase(it);
         } else {
             ++it;
         }
