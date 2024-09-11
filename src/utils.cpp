@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <mutex>
 #include <openssl/evp.h>
+#include <cstring>
 
 std::mutex logMutex;  // 用于保护日志写入的全局互斥锁
 
