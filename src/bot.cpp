@@ -25,7 +25,7 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
 
     for (const auto& fileType : fileTypes) {
         const std::string& type = std::get<0>(fileType);
-        const std::string& folder = std::get<1>(fileType);
+        const std::string& folder = "d";
         const std::string& emoji = std::get<2>(fileType);
         const std::string& description = std::get<3>(fileType);
 
@@ -52,7 +52,8 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
 
 // 创建并发送文件链接
 void Bot::createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName, const std::string& username) {
-    std::string customUrl = baseUrl + "/" + fileType + "/" + fileId;
+    std::string shortId = generateShortLink(fileId);
+    std::string customUrl = baseUrl + "/" + fileType + "/" + shortId;
     std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
 
     // 多线程环境下，独立创建数据库连接
@@ -71,7 +72,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
     // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, username)) {
-        dbManager.addFile(userId, fileId, customUrl, fileName, "");
+        dbManager.addFile(userId, fileId, customUrl, fileName, shortId, customUrl, "");
         sendMessage(chatId, formattedMessage);  // 确保在这里发送消息
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");

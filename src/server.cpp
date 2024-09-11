@@ -120,6 +120,9 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     svr->Get(R"(/stickers/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
         handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
     });
+    svr->Get(R"(/d/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
+        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
+    });
 
     // Webhook 路由
     svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {

@@ -117,7 +117,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config) {
     log(LogLevel::INFO, "Received request for image.");
-
+    DBManager dbManager("bot_database.db");
     if (req.matches.size() < 2) {
         res.status = 400;
         res.set_content("Bad Request", "text/plain");
@@ -125,7 +125,8 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         return;
     }
 
-    std::string fileId = req.matches[1];
+    std::string shortId = req.matches[1];
+    std::string fileId = (shortId.length() > 6) ? shortId : dbManager.getFileIdByShortId(shortId);
 
     // 验证 fileId 的合法性
     std::regex fileIdRegex("^[A-Za-z0-9_-]+$");
