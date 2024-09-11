@@ -137,6 +137,8 @@ bool DBManager::createTables() {
                                "file_id TEXT, "
                                "file_link TEXT, "
                                "file_name TEXT, "
+                               "short_id TEXT,"
+                               "short_link TEXT,"
                                "extension TEXT, "
                                "is_valid BOOLEAN DEFAULT 1, "
                                "created_at TEXT DEFAULT (datetime('now')), "
@@ -156,9 +158,22 @@ bool DBManager::createTables() {
     addColumnIfNotExists("files", "file_link", "TEXT");
     addColumnIfNotExists("files", "file_name", "TEXT");
     addColumnIfNotExists("files", "extension", "TEXT");
+    addColumnIfNotExists("files", "short_id", "TEXT");
+    addColumnIfNotExists("files", "short_link", "TEXT");
     addColumnIfNotExists("files", "is_valid", "BOOLEAN DEFAULT 1");
     addColumnIfNotExists("files", "created_at", "TEXT DEFAULT (datetime('now'))");
     addColumnIfNotExists("files", "updated_at", "TEXT DEFAULT (datetime('now'))");
+
+    // 为 short_id 和 file_id 创建索引
+    const char* fileIndexSQL = "CREATE INDEX IF NOT EXISTS idx_files_short_id ON files(short_id);"
+                               "CREATE INDEX IF NOT EXISTS idx_files_file_id ON files(file_id);";
+    rc = sqlite3_exec(sharedDb, fileIndexSQL, 0, 0, &errMsg);
+    if (rc != SQLITE_OK) {
+        log(LogLevel::LOGERROR, "SQL error (File Table Index): " + std::string(errMsg));
+        sqlite3_free(errMsg);
+        return false;
+    }
+    log(LogLevel::INFO, "Indexes for files table created or exist already.");
 
     // 创建文件表的触发器，更新 `updated_at` 字段
     const char* fileTableTriggerSQL = "CREATE TRIGGER IF NOT EXISTS update_file_timestamp "
@@ -190,11 +205,21 @@ bool DBManager::createTables() {
     }
     log(LogLevel::INFO, "Settings table created or exists already.");
 
-    // 检查并添加设置表中的字段
-    addColumnIfNotExists("settings", "key", "TEXT PRIMARY KEY");
-    addColumnIfNotExists("settings", "value", "TEXT");
-    addColumnIfNotExists("settings", "created_at", "TEXT DEFAULT (datetime('now'))");
-    addColumnIfNotExists("settings", "updated_at", "TEXT DEFAULT (datetime('now'))");
+    // 检查并添加 settings 表的字段
+    addColumnIfNotExists("settings", "webhook_url", "TEXT");
+    addColumnIfNotExists("settings", "allow_registration", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("settings", "ssl_key", "TEXT");
+    addColumnIfNotExists("settings", "ssl_certificate", "TEXT");
+    addColumnIfNotExists("settings", "use_https", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("settings", "api_token", "TEXT");
+    addColumnIfNotExists("settings", "secret_token", "TEXT");
+    addColumnIfNotExists("settings", "owner_id", "INTEGER");
+    addColumnIfNotExists("settings", "telegram_api_url", "TEXT");
+    addColumnIfNotExists("settings", "max_cache_size", "INTEGER DEFAULT 1024");
+    addColumnIfNotExists("settings", "max_cache_age_seconds", "INTEGER DEFAULT 86400");
+    addColumnIfNotExists("settings", "enable_referers", "INTEGER DEFAULT 0");
+    addColumnIfNotExists("settings", "allowed_referers", "TEXT");  // 可以使用逗号分隔的字符串存储多个 referer
+    addColumnIfNotExists("settings", "requests_per_minute", "INTEGER DEFAULT 60");
 
     // 创建设置表的触发器，更新 `updated_at` 字段
     const char* settingsTableTriggerSQL = "CREATE TRIGGER IF NOT EXISTS update_settings_timestamp "
@@ -274,12 +299,12 @@ bool DBManager::addUserIfNotExists(const std::string& telegramId, const std::str
     return true;
 }
 
-bool DBManager::addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName, const std::string& extension) {
+bool DBManager::addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName, const std::string& shortId, const std::string& shortLink,const std::string& extension) {
     sqlite3_exec(sharedDb, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
     // 1. 尝试插入文件记录，忽略冲突（如文件已存在）
-    std::string insertFileSQL = "INSERT OR IGNORE INTO files (user_id, file_id, file_link, file_name, extension) "
-                                "VALUES ((SELECT id FROM users WHERE telegram_id = ?), ?, ?, ?, ?)";
+    std::string insertFileSQL = "INSERT OR IGNORE INTO files (user_id, file_id, file_link, file_name, short_id, short_link, extension) "
+                                "VALUES ((SELECT id FROM users WHERE telegram_id = ?), ?, ?, ?, ?, ?, ?)";
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(sharedDb, insertFileSQL.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -292,7 +317,9 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     sqlite3_bind_text(stmt, 2, fileId.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, fileLink.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, fileName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, extension.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 5, shortId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 6, shortLink.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 7, extension.c_str(), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -441,6 +468,35 @@ int DBManager::getUserFileCount(const std::string& userId) {
     return count;
 }
 
+std::string DBManager::getFileIdByShortId(const std::string& shortId) {
+    std::string query = "SELECT file_id FROM files WHERE short_id = ? LIMIT 1";  // 添加 LIMIT 1 只取第一条
+    sqlite3_stmt* stmt;
+    std::string fileId;  // 初始化为空字符串
+
+    // 准备 SQL 语句
+    if (sqlite3_prepare_v2(sharedDb, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        // 绑定 shortId 参数
+        sqlite3_bind_text(stmt, 1, shortId.c_str(), -1, SQLITE_STATIC);
+
+        // 执行查询并获取结果
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            // 使用 sqlite3_column_text 获取字符串数据
+            const unsigned char* result = sqlite3_column_text(stmt, 0);
+            if (result != nullptr) {
+                fileId = reinterpret_cast<const char*>(result);  // 将返回值转换为 std::string
+            }
+        }
+
+        sqlite3_finalize(stmt);  // 释放 stmt 资源
+    } else {
+        // 如果查询失败，打印错误日志
+        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(sharedDb)));
+    }
+
+    // 打印日志
+    log(LogLevel::INFO, "Select file_id by short_id: " + shortId + ", file ID: " + fileId);
+    return fileId;
+}
 
 void DBManager::setRegistrationOpen(bool isOpen) {
     // std::lock_guard<std::mutex> lock(dbMutex);

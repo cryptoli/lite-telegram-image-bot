@@ -20,7 +20,7 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
             extension = filePath.substr(pos);
             std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
         }
-        if (extension.empty()) {
+        if (extension.empty() || extension == "bin") {
             if (filePath.find("photo") != std::string::npos) {
                 return "image/jpeg";
             }
@@ -117,7 +117,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config) {
     log(LogLevel::INFO, "Received request for image.");
-
+    DBManager dbManager("bot_database.db");
     if (req.matches.size() < 2) {
         res.status = 400;
         res.set_content("Bad Request", "text/plain");
@@ -125,7 +125,8 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         return;
     }
 
-    std::string fileId = req.matches[1];
+    std::string shortId = req.matches[1];
+    std::string fileId = (shortId.length() > 6) ? shortId : dbManager.getFileIdByShortId(shortId);
 
     // 验证 fileId 的合法性
     std::regex fileIdRegex("^[A-Za-z0-9_-]+$");
@@ -138,14 +139,29 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     log(LogLevel::INFO, "Checking file path from memory cache for file ID: " + fileId);
 
-    // Step 1: 先从 memoryCache 中获取 filePath
+    // Step 1: 从 memoryCache 中获取 filePath 是否存在
     std::string cachedFilePath;
     bool isMemoryCacheHit = memoryCache.getFilePathCache(fileId, cachedFilePath);
 
-    // 减少文件传输体积：判断是否支持 WebP 格式
-    std::string preferredExtension = (req.has_header("Accept") && req.get_header_value("Accept").find("image/webp") != std::string::npos) ? "webp" : "";
+    // 获取文件的扩展名，默认为空字符串
+    std::string preferredExtension = (req.has_header("Accept") && req.get_header_value("Accept").find("image/webp") != std::string::npos) ? "webp" : getFileExtension(cachedFilePath);
 
-    if (!isMemoryCacheHit) {
+    // 如果 memory 缓存命中，检查 image 缓存（磁盘）是否命中
+    if (isMemoryCacheHit) {
+        log(LogLevel::INFO, "Memory cache hit for file ID: " + fileId + ". Checking image cache.");
+        std::string cachedImageData = cacheManager.getCachedImage(fileId, preferredExtension);
+
+        if (!cachedImageData.empty()) {
+            log(LogLevel::INFO, "Image cache hit for file ID: " + fileId);
+            // 获取文件的 MIME 类型
+            std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
+            // 返回缓存的文件数据
+            setHttpResponse(res, cachedImageData, mimeType, req);
+            return;
+        } else {
+            log(LogLevel::INFO, "Image cache miss for file ID: " + fileId + ". Downloading from Telegram.");
+        }
+    } else {
         log(LogLevel::INFO, "Memory cache miss. Requesting file information from Telegram for file ID: " + fileId);
 
         // 如果 memoryCache 中没有 filePath，调用 getFile 接口获取文件路径
@@ -161,68 +177,41 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
         nlohmann::json jsonResponse = nlohmann::json::parse(fileResponse);
         if (jsonResponse.contains("result") && jsonResponse["result"].contains("file_path")) {
-            std::string filePath = jsonResponse["result"]["file_path"];
-            log(LogLevel::INFO, "Retrieved file path: " + filePath);
+            cachedFilePath = jsonResponse["result"]["file_path"];
+            log(LogLevel::INFO, "Retrieved file path: " + cachedFilePath);
 
-            // 将 filePath 缓存
-            memoryCache.addFilePathCache(fileId, filePath, 3600);
-
-            // 获取文件扩展名
-            std::string extension = preferredExtension.empty() ? getFileExtension(filePath) : preferredExtension;
-
-            // Step 2: 根据 filePath 从 Telegram 下载文件并缓存
-            std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + filePath;
-            std::string fileData = sendHttpRequest(telegramFileDownloadUrl);
-
-            if (fileData.empty()) {
-                res.status = 500;
-                res.set_content("Failed to download file from Telegram", "text/plain");
-                log(LogLevel::LOGERROR, "Failed to download file from Telegram for file path: " + filePath);
-                return;
-            }
-
-            // 异步将文件缓存到磁盘
-            std::async(std::launch::async, [&cacheManager, fileId, fileData, extension]() {
-                cacheManager.cacheImage(fileId, fileData, extension);
-            });
-
-            // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
-            std::string mimeType = getMimeType(filePath, mimeTypes);
-            setHttpResponse(res, fileData, mimeType, req);
-            log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
+            // 将 filePath 存入 memoryCache
+            memoryCache.addFilePathCache(fileId, cachedFilePath, 3600);
         } else {
             res.status = 404;
             res.set_content("File Not Found", "text/plain");
             log(LogLevel::LOGERROR, "File not found in Telegram for ID: " + fileId);
             return;
         }
-    } else {
-        log(LogLevel::INFO, "File path cache hit for file ID: " + fileId);
-
-        // 如果缓存命中，使用缓存的 filePath 进行文件下载
-        std::string extension = preferredExtension.empty() ? getFileExtension(cachedFilePath) : preferredExtension;
-
-        std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
-        std::string fileData = sendHttpRequest(telegramFileDownloadUrl);
-
-        if (fileData.empty()) {
-            res.status = 500;
-            res.set_content("Failed to download file from Telegram", "text/plain");
-            log(LogLevel::LOGERROR, "Failed to download file from Telegram for cached file path: " + cachedFilePath);
-            return;
-        }
-
-        // 异步将文件缓存到磁盘
-        std::async(std::launch::async, [&cacheManager, fileId, fileData, extension]() {
-            cacheManager.cacheImage(fileId, fileData, extension);
-        });
-
-        // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
-        std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
-        setHttpResponse(res, fileData, mimeType, req);
-        log(LogLevel::INFO, "Successfully served cached file for file ID: " + fileId);
     }
+
+    // 从 Telegram 下载文件
+    std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
+    std::string fileData = sendHttpRequest(telegramFileDownloadUrl);
+
+    if (fileData.empty()) {
+        res.status = 500;
+        res.set_content("Failed to download file from Telegram", "text/plain");
+        log(LogLevel::LOGERROR, "Failed to download file from Telegram for file path: " + cachedFilePath);
+        return;
+    }
+
+    // 异步将文件内容缓存到磁盘
+    std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
+        cacheManager.cacheImage(fileId, fileData, preferredExtension);
+    });
+
+    // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
+    std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
+    setHttpResponse(res, fileData, mimeType, req);
+    log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
 }
+
 
 void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req) {
     // 添加 HTTP 缓存控制头
