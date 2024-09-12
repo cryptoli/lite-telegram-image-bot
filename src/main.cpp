@@ -26,10 +26,10 @@ void setWebhook(const std::string& apiToken, const std::string& webhookUrl, cons
 
 int main(int argc, char* argv[]) {
     // 设置SQLite为序列化模式，确保线程安全
-    sqlite3_config(SQLITE_CONFIG_SERIALIZED);
+    // sqlite3_config(SQLITE_CONFIG_SERIALIZED);
 
     // 初始化数据库
-    DBManager dbManager("bot_database.db");
+    DBManager dbManager("bot_database.db", 2, 20);
     if (!dbManager.initialize()) {
         std::cerr << "Init Database error...quit." << std::endl;
         return 1;
@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     ImageCacheManager cacheManager("cache", config.getCacheMaxSizeMB(), config.getCacheMaxAgeSeconds());
 
     // 创建 Bot 实例
-    Bot bot(apiToken);
+    Bot bot(apiToken, dbManager);
 
     // 获取配置的 Webhook URL
     std::string webhookUrl = config.getWebhookUrl();

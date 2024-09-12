@@ -1,6 +1,7 @@
 #ifndef DB_MANAGER_H
 #define DB_MANAGER_H
 
+#include "dynamic_sqlite_thread_pool.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -8,7 +9,7 @@
 
 class DBManager {
 public:
-    DBManager(const std::string& dbFile);
+    DBManager(const std::string& dbFile, int minPoolSize = 2, int maxPoolSize = 20);
     ~DBManager();
 
     // 初始化数据库，创建表结构
@@ -45,8 +46,8 @@ public:
     bool isUserBanned(const std::string& telegramId);
 
 private:
-    static sqlite3* sharedDb;
     std::string dbFile;
+    DynamicSQLiteThreadPool threadPool;
 
     // 创建所需的表
     bool createTables();
