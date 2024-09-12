@@ -3,17 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>Media Gallery</title>
     <style>
-        /* 添加样式 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-top: 20px;
+        }
+
+        /* 设置容器为网格布局，并确保图片自适应多列 */
+        .gallery-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* 将最小宽度调整为150px */
+            gap: 10px;
+            padding: 20px;
+        }
+
+        /* 每个媒体项 */
+        .media-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .media-item:hover {
+            transform: scale(1.05);
+        }
+
+        /* 图片和视频的最大宽度和高度为100%，并保持比例 */
+        .media-preview {
+            width: 100%;
+            height: auto;
+            max-height: 200px; /* 将最大高度调整为200px */
+            object-fit: cover; /* 保持图片比例裁剪 */
+            border-radius: 5px;
+        }
+
+        .media-name {
+            margin-top: 10px;
+            font-size: 14px;
+            text-align: center;
+            color: #555;
+        }
+
+        /* 加载更多 */
+        .loader {
+            text-align: center;
+            margin: 20px;
+        }
+
+        /* 响应式设计 - 处理不同屏幕尺寸的布局 */
+        @media (max-width: 1200px) {
+            h1 {
+                font-size: 2em;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5em;
+            }
+
+            /* 在较小的屏幕上减少列数，适应屏幕大小 */
+            .gallery-container {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* 将最小宽度调整为120px */
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.2em;
+            }
+
+            /* 在手机屏幕上显示更小的图片 */
+            .gallery-container {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); /* 将最小宽度调整为100px */
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Home</h1>
-        <p>Welcome to the image gallery.</p>
+    <h1>Media Gallery</h1>
+    <div class="gallery-container" id="gallery">
         {{gallery}}
     </div>
+    <div class="loader" id="loader">Loading more...</div>
+
+    <script>
+        let currentPage = 1;
+        let loading = false;
+
+        function loadMoreMedia() {
+            if (loading) return;
+            loading = true;
+            currentPage++;
+
+            fetch(`/?page=${currentPage}`)
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const newDocument = parser.parseFromString(html, "text/html");
+                    const newItems = newDocument.querySelectorAll(".media-item");
+                    const gallery = document.getElementById("gallery");
+
+                    newItems.forEach(item => {
+                        gallery.appendChild(item);
+                    });
+
+                    loading = false;
+                })
+                .catch(err => {
+                    console.error("Error loading more media:", err);
+                    loading = false;
+                });
+        }
+
+        // Infinite scrolling
+        window.addEventListener("scroll", () => {
+            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+                loadMoreMedia();
+            }
+        });
+    </script>
 </body>
 </html>
-

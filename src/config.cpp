@@ -124,3 +124,20 @@ std::string Config::getTelegramApiUrl() const {
     }
     return configData["telegram_api_url"].get<std::string>();
 }
+
+// Security configurations
+bool Config::enableReferers() const {
+    return configData["security"]["enable_referers"].get<bool>();
+}
+
+std::vector<std::string> Config::getAllowedReferers() const {
+    std::vector<std::string> allowedReferers;
+    for (const auto& referer : configData["security"]["allowed_referers"]) {
+        allowedReferers.push_back(referer.get<std::string>());
+    }
+    return allowedReferers;
+}
+
+int Config::getRateLimitRequestsPerMinute() const {
+    return configData["security"]["rate_limit"]["requests_per_minute"].get<int>();
+}

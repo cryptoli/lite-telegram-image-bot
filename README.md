@@ -57,7 +57,7 @@ lite-telegram-image-bot/
 ### 1. 克隆项目
 
 ```bash
-git https://github.com/cryptoli/lite-telegram-image-bot.git
+git clone https://github.com/cryptoli/lite-telegram-image-bot.git
 cd lite-telegram-image-bot
 ```
 
@@ -66,7 +66,7 @@ cd lite-telegram-image-bot
 在 Ubuntu 上，你可以使用以下命令安装所需的库：
 
 ```bash
-sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev sqlite3 libsqlite3-dev
+sudo apt-get install g++ libcurl4-openssl-dev make nlohmann-json3-dev libssl-dev sqlite3 libsqlite3-dev zlib1g-dev
 ```
 
 ### 3. 编译项目
@@ -146,6 +146,13 @@ telegram_api_url默认为官方api，如果需要自定义可以修改
     "cache": {
         "max_size_mb": 100,
         "max_age_seconds": 3600
+    },
+    "security": {
+        "enable_referers": false,
+        "allowed_referers": ["yourdomain.com", "anotherdomain.com"],
+        "rate_limit": {
+            "requests_per_minute": 60
+        }
     }
 }
 ```
