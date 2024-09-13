@@ -16,20 +16,22 @@ DBManager::DBManager(const std::string& dbFile, int maxPoolSize, int maxIdleTime
     : dbFile(dbFile), maxPoolSize(maxPoolSize), maxIdleTimeSeconds(maxIdleTimeSeconds), stopThread(false) {
     initializePool();  // 初始化连接池
 }
-
-DBManager::~DBManager() {
-     stopPoolThread();
-    closeAllConnections();  // 关闭所有连接
+void DBManager::initializePool() {
+    stopThread.store(false);  // 确保 stopThread 初始化为 false
+    cleanupThread = std::thread([this]() {
+        while (!stopThread.load()) {
+            std::this_thread::sleep_for(std::chrono::seconds(maxIdleTimeSeconds));
+            cleanupIdleConnections();
+        }
+    });
 }
 
-// 初始化连接池：启动定期清理空闲连接的线程
-void DBManager::initializePool() {
-std::thread([this]() {
-    while (!stopThread.load()) {
-        std::this_thread::sleep_for(std::chrono::seconds(maxIdleTimeSeconds));
-        cleanupIdleConnections();
+DBManager::~DBManager() {
+    stopPoolThread();
+    if (cleanupThread.joinable()) {
+        cleanupThread.join();  // 确保清理线程安全结束
     }
-}).detach();
+    closeAllConnections();
 }
 
 void DBManager::stopPoolThread() {
@@ -38,7 +40,7 @@ void DBManager::stopPoolThread() {
 
 // 获取连接：从连接池中获取一个连接，如果没有可用连接则动态创建
 sqlite3* DBManager::getDbConnection() {
-    std::unique_lock<std::mutex> lock(poolMutex);
+    std::unique_lock<std::mutex> lock(poolMutex);  // 确保线程安全
 
     // 如果有可用的连接，直接返回
     if (!connectionPool.empty()) {
@@ -97,17 +99,16 @@ void DBManager::cleanupIdleConnections() {
 
 // 关闭所有连接：关闭池中所有连接
 void DBManager::closeAllConnections() {
-    std::unique_lock<std::mutex> lock(poolMutex);
+    std::unique_lock<std::mutex> lock(poolMutex);  // 确保线程安全
     while (!connectionPool.empty()) {
         sqlite3* db = connectionPool.front();
         connectionPool.pop();
-        sqlite3_close(db);  // 关闭连接
+        sqlite3_close(db);  // 关闭数据库连接
     }
 
     for (const auto& idleConn : idleConnections) {
-        sqlite3_close(idleConn.first);  // 关闭空闲连接
+        sqlite3_close(idleConn.first);  // 关闭所有空闲连接
     }
-
     idleConnections.clear();
 }
 
@@ -382,14 +383,24 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     sqlite3_stmt* checkStmt;
     int rc = sqlite3_prepare_v2(db, checkFileSQL.c_str(), -1, &checkStmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement (File Check): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement addFile (File Check): " + std::string(sqlite3_errmsg(db)));
         sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
         releaseDbConnection(db);
         return false;
     }
 
+    // 绑定 file_id 参数
     sqlite3_bind_text(checkStmt, 1, fileId.c_str(), -1, SQLITE_STATIC);
     rc = sqlite3_step(checkStmt);
+    
+    if (rc != SQLITE_ROW) {
+        log(LogLevel::LOGERROR, "Failed to step SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        sqlite3_finalize(checkStmt);
+        sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+        releaseDbConnection(db);
+        return false;
+    }
+
     int fileExists = sqlite3_column_int(checkStmt, 0); // 如果大于0，表示文件已存在
     sqlite3_finalize(checkStmt);
 
@@ -413,6 +424,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
             return false;
         }
 
+        // 绑定更新语句的参数
         sqlite3_bind_text(updateStmt, 1, fileLink.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(updateStmt, 2, fileName.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(updateStmt, 3, shortId.c_str(), -1, SQLITE_STATIC);
@@ -444,6 +456,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
             return false;
         }
 
+        // 绑定插入语句的参数
         sqlite3_bind_text(insertStmt, 1, userId.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(insertStmt, 2, fileId.c_str(), -1, SQLITE_STATIC);
         sqlite3_bind_text(insertStmt, 3, fileLink.c_str(), -1, SQLITE_STATIC);

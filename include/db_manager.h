@@ -11,6 +11,7 @@
 #include <chrono>
 #include <sqlite3.h>
 #include <atomic>
+#include <thread>
 
 class DBManager {
 public:
@@ -43,6 +44,7 @@ private:
     int maxPoolSize;
     int maxIdleTimeSeconds;
     std::atomic<bool> stopThread;
+    std::thread cleanupThread;
 
     DBManager(const std::string& dbFile, int maxPoolSize, int maxIdleTimeSeconds);
     ~DBManager();

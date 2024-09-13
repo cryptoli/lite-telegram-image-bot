@@ -133,12 +133,14 @@ void CacheManager::cleanupExpiredCache() {
 // 启动清理线程
 void CacheManager::startCleanupThread() {
     cleanupThread = std::thread([this]() {
-        std::unique_lock<std::mutex> lock(cacheMutex);
-        while (!stopThread) {
-            cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; });
-            if (stopThread) break;
-            lock.unlock();
-            cleanupExpiredCache();  // 定期清理缓存和限流数据
+        while (true) {
+            std::unique_lock<std::mutex> lock(cacheMutex);
+            // 等待清理间隔时间或 stopThread 为 true 时唤醒
+            if (cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; })) {
+                break; // 如果 stopThread 为 true，退出线程
+            }
+            lock.unlock();  // 解锁，允许其他线程使用 cacheMutex
+            cleanupExpiredCache();  // 执行清理操作
         }
     });
 }
@@ -149,8 +151,8 @@ void CacheManager::stopCleanupThread() {
         std::lock_guard<std::mutex> lock(cacheMutex);
         stopThread = true;
     }
-    cv.notify_all();
+    cv.notify_all();  // 通知清理线程停止
     if (cleanupThread.joinable()) {
-        cleanupThread.join();
+        cleanupThread.join();  // 等待清理线程结束
     }
 }
