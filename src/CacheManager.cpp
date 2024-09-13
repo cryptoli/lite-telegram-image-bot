@@ -137,6 +137,7 @@ void CacheManager::startCleanupThread() {
         while (!stopThread) {
             cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; });
             if (stopThread) break;
+            lock.unlock();
             cleanupExpiredCache();  // 定期清理缓存和限流数据
         }
     });

@@ -10,6 +10,6 @@
 #include "CacheManager.h"
 
 
-void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter);
+void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter, DBManager& dbManager);
 
 #endif

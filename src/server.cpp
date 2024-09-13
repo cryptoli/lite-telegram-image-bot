@@ -80,7 +80,7 @@ std::string loadTemplate(const std::string& filepath) {
     return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 }
 
-void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter) {
+void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter, DBManager& dbManager) {
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
     std::string secretToken = config.getSecretToken();
@@ -100,8 +100,8 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     }
 
     // 定义一个通用的媒体请求处理函数
-    auto mediaRequestHandler = [&apiToken, &mimeTypes, &cacheManager, &rateLimiter, &telegramApiUrl, &config](const httplib::Request& req, httplib::Response& res) {
-        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config);
+    auto mediaRequestHandler = [&apiToken, &mimeTypes, &cacheManager, &rateLimiter, &telegramApiUrl, &config, &dbManager](const httplib::Request& req, httplib::Response& res) {
+        handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config, dbManager);
     };
 
     // 为五个路由设置通用的限流和 referer 验证
@@ -158,8 +158,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     });
 
     // 首页路由
-    svr->Get("/", [](const httplib::Request& req, httplib::Response& res) {
-        DBManager dbManager("bot_database.db");
+    svr->Get("/", [&dbManager](const httplib::Request& req, httplib::Response& res) {
         int page = req.has_param("page") ? std::stoi(req.get_param_value("page")) : 1;
         int pageSize = 10;
 
@@ -194,5 +193,11 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         }
     });
 
-    serverFuture.get();
+    try {
+        serverFuture.get();
+    } catch (const std::system_error& e) {
+        log(LogLevel::LOGERROR, "System error occurred: " + std::string(e.what()));
+        throw;
+    }
+
 }

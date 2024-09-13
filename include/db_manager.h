@@ -3,58 +3,61 @@
 
 #include <string>
 #include <vector>
-#include <utility>
+#include <tuple>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <unordered_map>
+#include <chrono>
 #include <sqlite3.h>
+#include <atomic>
 
 class DBManager {
 public:
-    DBManager(const std::string& dbFile);
-    ~DBManager();
+    static DBManager& getInstance(const std::string& dbFile = "bot_database.db", int maxPoolSize = 20, int maxIdleTimeSeconds = 60);
 
-    // 初始化数据库，创建表结构
+    DBManager(const DBManager&) = delete;
+    DBManager& operator=(const DBManager&) = delete;
+
     bool initialize();
-
-    // 添加用户，如果用户不存在则添加
+    bool createTables();
     bool addUserIfNotExists(const std::string& telegramId, const std::string& username);
-
-    // 检查用户是否已注册
-    bool isUserRegistered(const std::string& telegramId);
-
-    // 添加文件记录
-    bool addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName,const std::string& shortId,const std::string& shortLink, const std::string& extension);
-
-    // 删除文件记录
-    bool removeFile(const std::string& userId, const std::string& fileName);
-
-    // 获取用户的文件列表
-    std::vector<std::tuple<std::string, std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
-
-    int getUserFileCount(const std::string& userId);
-
-    // 封禁用户
+    bool addFile(const std::string& userId, const std::string& fileId, const std::string& fileLink, const std::string& fileName, const std::string& shortId, const std::string& shortLink, const std::string& extension);
+    bool removeFile(const std::string& userId, const std::string& fileId);
     bool banUser(const std::string& telegramId);
     bool unbanUser(const std::string& telegramId);
-
-    // 设置是否允许注册
-    void setRegistrationOpen(bool isOpen);
-
-    // 检查是否允许注册
-    bool isRegistrationOpen();
-    int getTotalUserCount();
-    std::vector<std::tuple<std::string, std::string, bool>> getUsersForBan(int page, int pageSize);
+    bool isUserRegistered(const std::string& telegramId);
     bool isUserBanned(const std::string& telegramId);
+    bool isRegistrationOpen();
+    void setRegistrationOpen(bool isOpen);
+    
+    int getUserFileCount(const std::string& userId);
+    int getTotalUserCount();
+    std::vector<std::tuple<std::string, std::string, std::string>> getUserFiles(const std::string& userId, int page, int pageSize);
+    std::vector<std::tuple<std::string, std::string, bool>> getUsersForBan(int page, int pageSize);
     std::vector<std::tuple<std::string, std::string, std::string, std::string>> getImagesAndVideos(int page, int pageSize);
     std::string getFileIdByShortId(const std::string& shortId);
 
 private:
-    static sqlite3* sharedDb;
     std::string dbFile;
+    int maxPoolSize;
+    int maxIdleTimeSeconds;
+    std::atomic<bool> stopThread;
 
-    // 创建所需的表
-    bool createTables();
+    DBManager(const std::string& dbFile, int maxPoolSize, int maxIdleTimeSeconds);
+    ~DBManager();
 
-    // 执行SQL语句的通用函数
-    bool executeSQL(const std::string& query);
+    std::queue<sqlite3*> connectionPool;
+    std::unordered_map<sqlite3*, std::chrono::steady_clock::time_point> idleConnections;  // 存储连接的空闲时间
+    std::mutex poolMutex;
+    std::condition_variable poolCondition;
+
+    sqlite3* getDbConnection();
+    void releaseDbConnection(sqlite3* db);
+    void initializePool();
+    void cleanupIdleConnections();
+    void closeAllConnections();
+     void stopPoolThread();
 };
 
 #endif

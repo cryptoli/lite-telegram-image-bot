@@ -6,7 +6,11 @@
 Config::Config(const std::string& filePath) {
     std::ifstream configFile(filePath);
     if (configFile.is_open()) {
-        configFile >> configData;
+        try {
+            configFile >> configData;  // 解析JSON数据
+        } catch (const nlohmann::json::parse_error& e) {
+            throw std::runtime_error("Error parsing config file: " + std::string(e.what()));
+        }
         configFile.close();
     } else {
         throw std::runtime_error("Unable to open config file");
@@ -24,7 +28,13 @@ std::string Config::getHostname() const {
 int Config::getPort() const {
     const char* envPort = std::getenv("PORT");
     if (envPort != nullptr) {
-        return std::stoi(envPort);
+        try {
+            return std::stoi(envPort);
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "Invalid PORT value in environment variable: " << envPort << std::endl;
+        } catch (const std::out_of_range& e) {
+            std::cerr << "PORT value out of range in environment variable: " << envPort << std::endl;
+        }
     }
     return configData["server"]["port"].get<int>();
 }
