@@ -4,8 +4,9 @@
 #include "http_client.h"
 #include "utils.h"
 #include <fstream>
+#include "db_manager.h"
 
-Bot::Bot(const std::string& token) : apiToken(token) {
+Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbManager(dbManager) {
     initializeOwnerId();  // 初始化时获取Bot的所属者ID
 }
 
@@ -57,7 +58,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
 
     // 多线程环境下，独立创建数据库连接
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     // 检查是否允许注册
     if (!dbManager.isUserRegistered(userId) && !dbManager.isRegistrationOpen() && !isOwner(userId)) {
@@ -73,17 +74,17 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, username)) {
         dbManager.addFile(userId, fileId, customUrl, fileName, shortId, customUrl, "");
-        sendMessage(chatId, formattedMessage);  // 确保在这里发送消息
+        sendMessage(chatId, formattedMessage);
+        log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
     }
-    log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
 }
 
 // 修改的 /my 命令，支持分页并通过按钮切换上下页
 void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
     // 初始化DBManager
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     // 获取用户文件总数并计算总页数
     int totalFiles = dbManager.getUserFileCount(userId);
@@ -149,7 +150,7 @@ std::string Bot::createPaginationKeyboard(int currentPage, int totalPages) {
 }
 
 void Bot::listRemovableFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     int totalFiles = dbManager.getUserFileCount(userId);
     int totalPages = (totalFiles + pageSize - 1) / pageSize;
@@ -196,7 +197,7 @@ void Bot::listRemovableFiles(const std::string& chatId, const std::string& userI
 }
 
 void Bot::listUsersForBan(const std::string& chatId, int page, int pageSize, const std::string& messageId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     int totalUsers = dbManager.getTotalUserCount();
     int totalPages = (totalUsers + pageSize - 1) / pageSize;
@@ -270,7 +271,7 @@ void Bot::processCallbackQuery(const nlohmann::json& callbackQuery) {
         else if (callbackData.rfind("delete_", 0) == 0) {
             std::string fileId = callbackData.substr(7);
             log(LogLevel::INFO, userId + " delete file: " + fileId + ", callbackData: " + callbackQuery.dump());
-            DBManager dbManager("bot_database.db");
+            // DBManager dbManager("bot_database.db");
             if (dbManager.removeFile(userId, fileId)) {
                 sendMessage(chatId, "文件已删除: " + fileId);
             } else {
@@ -399,7 +400,7 @@ void Bot::removeFile(const std::string& chatId, const std::string& userId, const
         {"sticker", "file_id"}
     };
 
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     for (const auto& fileType : fileTypes) {
         const std::string& type = fileType.first;
@@ -430,7 +431,7 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
         return;
     }
 
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
     if (dbManager.isUserRegistered(targetUserId)) {
         if (dbManager.banUser(targetUserId)) {
             sendMessage(chatId, "用户已被封禁: " + targetUserId);
@@ -443,7 +444,7 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
 }
 
 void Bot::banUserById(const std::string& chatId, const std::string& targetUserId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     // Prevent bot owner from banning themselves
     if (isOwner(targetUserId)) {
@@ -464,7 +465,7 @@ void Bot::banUserById(const std::string& chatId, const std::string& targetUserId
 }
 
 void Bot::toggleBanUser(const std::string& chatId, const std::string& targetUserId, const std::string& messageId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
 
     // Prevent bot owner from being banned/unbanned
     if (isOwner(targetUserId)) {
@@ -494,14 +495,14 @@ void Bot::toggleBanUser(const std::string& chatId, const std::string& targetUser
 
 // openregister命令：开启注册
 void Bot::openRegister(const std::string& chatId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
     dbManager.setRegistrationOpen(true);
     sendMessage(chatId, "注册已开启");
 }
 
 // closeregister命令：关闭注册
 void Bot::closeRegister(const std::string& chatId) {
-    DBManager dbManager("bot_database.db");
+    // DBManager dbManager("bot_database.db");
     dbManager.setRegistrationOpen(false);
     sendMessage(chatId, "注册已关闭");
 }

@@ -10,7 +10,7 @@ ThreadPool::~ThreadPool() {
         stop = true;
     }
     condition.notify_all();
-    for(std::thread &worker: workers)
+    for (std::thread &worker : workers)
         worker.join();
 }
 
@@ -18,15 +18,16 @@ void ThreadPool::resize(size_t newSize) {
     if (newSize > maxThreads) {
         newSize = maxThreads;
     }
-    
+
+    // 增加新的线程
     while (workers.size() < newSize) {
         workers.emplace_back([this] {
-            for(;;) {
+            for (;;) {
                 std::function<void()> task;
                 {
                     std::unique_lock<std::mutex> lock(this->queueMutex);
-                    this->condition.wait(lock, [this]{ return this->stop || !this->tasks.empty(); });
-                    if(this->stop && this->tasks.empty())
+                    this->condition.wait(lock, [this] { return this->stop || !this->tasks.empty(); });
+                    if (this->stop && this->tasks.empty())
                         return;
                     task = std::move(this->tasks.front());
                     this->tasks.pop();
@@ -35,9 +36,19 @@ void ThreadPool::resize(size_t newSize) {
             }
         });
     }
-    
+
+    // 安全地减少线程
     while (workers.size() > newSize) {
-        workers.back().detach();
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            stop = true;
+        }
+        condition.notify_all();  // 唤醒所有线程，让它们检查 stop 状态
+        for (std::thread &worker : workers) {
+            if (worker.joinable()) {
+                worker.join();  // 等待线程完成
+            }
+        }
         workers.pop_back();
     }
 }

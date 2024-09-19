@@ -115,9 +115,8 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     curl_easy_cleanup(curl);
 }
 
-void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config) {
+void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config, DBManager& dbManager) {
     log(LogLevel::INFO, "Received request for image.");
-    DBManager dbManager("bot_database.db");
     if (req.matches.size() < 2) {
         res.status = 400;
         res.set_content("Bad Request", "text/plain");
@@ -202,9 +201,11 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     }
 
     // 异步将文件内容缓存到磁盘
-    std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
+    auto future = std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
         cacheManager.cacheImage(fileId, fileData, preferredExtension);
     });
+
+    future.get();
 
     // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
     std::string mimeType = getMimeType(cachedFilePath, mimeTypes);

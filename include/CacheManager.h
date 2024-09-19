@@ -8,11 +8,17 @@
 #include <condition_variable>
 #include <vector>
 #include <thread>
+#include <unordered_set>
 
 // 缓存项结构
 struct CacheItem {
     std::string data;
     std::chrono::steady_clock::time_point expirationTime;
+};
+
+struct RateLimitInfo {
+    std::chrono::steady_clock::time_point lastRequestTime;
+    int requestCount;
 };
 
 // 缓存管理类
@@ -36,7 +42,7 @@ public:
     bool checkRateLimit(const std::string& clientIp, int maxRequestsPerMinute);
 
     // Referer 检查
-    bool checkReferer(const std::string& referer, const std::vector<std::string>& allowedReferers);
+    bool checkReferer(const std::string& referer, const std::unordered_set<std::string>& allowedReferers);
 
     // 启动清理线程
     void startCleanupThread();
@@ -51,6 +57,7 @@ private:
     std::unordered_map<std::string, int> requestCounts;
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> requestTimestamps;
     std::unordered_map<std::string, CacheItem> fileExtensionCache;
+    std::unordered_map<std::string, RateLimitInfo> rateLimitMap;
 
     std::mutex cacheMutex;
     size_t maxCacheSize;

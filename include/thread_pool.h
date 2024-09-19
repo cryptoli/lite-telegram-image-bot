@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <future>
 #include <functional>
+#include <stdexcept>
 
 class ThreadPool {
 public:
@@ -15,9 +16,10 @@ public:
     ~ThreadPool();
 
     void resize(size_t newSize);
-    
+
     template<class F, class... Args>
-    auto enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type>;
+    auto enqueue(F&& f, Args&&... args) 
+        -> std::future<typename std::invoke_result<F, Args...>::type>;
 
 private:
     std::vector<std::thread> workers;

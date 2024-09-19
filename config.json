@@ -12,6 +12,7 @@
     "secret_token": "random_secret_token",
     "owner_id": "your_telegram_id",
     "telegram_api_url": "https://api.telegram.org",
+    "channel_id": "your_telegram_channel_id",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",

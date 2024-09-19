@@ -25,6 +25,7 @@ public:
     bool enableReferers() const;
     std::vector<std::string> getAllowedReferers() const;
     int getRateLimitRequestsPerMinute() const;
+    std::string getTelegramChannelId() const;
 
 
 private:

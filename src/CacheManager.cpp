@@ -1,6 +1,7 @@
 #include "CacheManager.h"
 #include <iostream>
 #include "utils.h"
+#include <unordered_set>
 
 CacheManager::CacheManager(size_t maxCacheSize, int cleanupIntervalSeconds)
     : maxCacheSize(maxCacheSize), cleanupIntervalSeconds(cleanupIntervalSeconds), stopThread(false) {
@@ -14,6 +15,9 @@ CacheManager::~CacheManager() {
 // 添加缓存
 void CacheManager::addCache(const std::string& key, const std::string& data, int ttlSeconds) {
     std::lock_guard<std::mutex> lock(cacheMutex);
+    if (cacheMap.size() >= maxCacheSize) {
+        cacheMap.erase(cacheMap.begin());
+    }
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(ttlSeconds);
     cacheMap[key] = {data, expirationTime};
 }
@@ -35,6 +39,9 @@ bool CacheManager::getCache(const std::string& key, std::string& data) {
 
 void CacheManager::addFilePathCache(const std::string& fileId, const std::string& filePath, int ttlSeconds) {
     std::lock_guard<std::mutex> lock(cacheMutex);
+    if (fileExtensionCache.size() >= maxCacheSize) {
+        fileExtensionCache.erase(cacheMap.begin());
+    }
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(ttlSeconds);
     fileExtensionCache[fileId] = {filePath, expirationTime};  // 存储文件后缀缓存
 }
@@ -63,16 +70,16 @@ void CacheManager::deleteCache(const std::string& key) {
 bool CacheManager::checkRateLimit(const std::string& clientIp, int maxRequestsPerMinute) {
     std::lock_guard<std::mutex> lock(cacheMutex);
     auto now = std::chrono::steady_clock::now();
-    auto& lastRequestTime = requestTimestamps[clientIp];
-    auto& requestCount = requestCounts[clientIp];
+    auto& info = rateLimitMap[clientIp];
 
-    if (std::chrono::duration_cast<std::chrono::seconds>(now - lastRequestTime).count() > 60) {
-        requestCount = 0;  // 重置请求计数
-        lastRequestTime = now;
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - info.lastRequestTime).count() > 60) {
+        info.requestCount = 1;  // 重置请求计数并设为1
+        info.lastRequestTime = now;
+    } else {
+        info.requestCount++;
     }
 
-    requestCount++;
-    if (requestCount > maxRequestsPerMinute) {
+    if (info.requestCount > maxRequestsPerMinute) {
         return false;  // 超出限流
     }
 
@@ -80,7 +87,7 @@ bool CacheManager::checkRateLimit(const std::string& clientIp, int maxRequestsPe
 }
 
 // Referer 检查
-bool CacheManager::checkReferer(const std::string& referer, const std::vector<std::string>& allowedReferers) {
+bool CacheManager::checkReferer(const std::string& referer, const std::unordered_set<std::string>& allowedReferers) {
     for (const auto& allowed : allowedReferers) {
         if (referer.find(allowed) != std::string::npos) {
             return true;
@@ -92,12 +99,9 @@ bool CacheManager::checkReferer(const std::string& referer, const std::vector<st
 // 定期清理过期的限流数据
 void CacheManager::cleanupExpiredRateLimitData() {
     auto now = std::chrono::steady_clock::now();
-    
-    // 遍历并删除超过 60 秒未请求的 IP 地址
-    for (auto it = requestTimestamps.begin(); it != requestTimestamps.end();) {
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count() > 60) {
-            requestCounts.erase(it->first);  // 同时删除 requestCounts 中对应的条目
-            it = requestTimestamps.erase(it);  // 删除 requestTimestamps 中的条目
+    for (auto it = rateLimitMap.begin(); it != rateLimitMap.end();) {
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.lastRequestTime).count() > 60) {
+            it = rateLimitMap.erase(it);
         } else {
             ++it;
         }
@@ -106,6 +110,7 @@ void CacheManager::cleanupExpiredRateLimitData() {
 
 // 清理过期缓存
 void CacheManager::cleanupExpiredCache() {
+    std::lock_guard<std::mutex> lock(cacheMutex);
     auto now = std::chrono::steady_clock::now();
     
     // 清理缓存数据
@@ -133,11 +138,14 @@ void CacheManager::cleanupExpiredCache() {
 // 启动清理线程
 void CacheManager::startCleanupThread() {
     cleanupThread = std::thread([this]() {
-        std::unique_lock<std::mutex> lock(cacheMutex);
-        while (!stopThread) {
-            cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; });
-            if (stopThread) break;
-            cleanupExpiredCache();  // 定期清理缓存和限流数据
+        while (true) {
+            std::unique_lock<std::mutex> lock(cacheMutex);
+            // 等待清理间隔时间或 stopThread 为 true 时唤醒
+            if (cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; })) {
+                break; // 如果 stopThread 为 true，退出线程
+            }
+            lock.unlock();  // 解锁，允许其他线程使用 cacheMutex
+            cleanupExpiredCache();  // 执行清理操作
         }
     });
 }
@@ -148,8 +156,8 @@ void CacheManager::stopCleanupThread() {
         std::lock_guard<std::mutex> lock(cacheMutex);
         stopThread = true;
     }
-    cv.notify_all();
+    cv.notify_all();  // 通知清理线程停止
     if (cleanupThread.joinable()) {
-        cleanupThread.join();
+        cleanupThread.join();  // 等待清理线程结束
     }
 }
