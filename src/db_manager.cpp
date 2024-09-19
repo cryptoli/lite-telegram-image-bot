@@ -13,9 +13,10 @@ DBManager& DBManager::getInstance(const std::string& dbFile, int maxPoolSize, in
 
 // 构造函数私有化
 DBManager::DBManager(const std::string& dbFile, int maxPoolSize, int maxIdleTimeSeconds)
-    : dbFile(dbFile), maxPoolSize(maxPoolSize), maxIdleTimeSeconds(maxIdleTimeSeconds), stopThread(false) {
-    initializePool();  // 初始化连接池
+    : dbFile(dbFile), maxPoolSize(maxPoolSize), maxIdleTimeSeconds(maxIdleTimeSeconds), stopThread(false), currentConnectionCount(0) {
+    initializePool(); 
 }
+
 void DBManager::initializePool() {
     stopThread.store(false);  // 确保 stopThread 初始化为 false
     cleanupThread = std::thread([this]() {
@@ -46,16 +47,18 @@ sqlite3* DBManager::getDbConnection() {
     if (!connectionPool.empty()) {
         sqlite3* db = connectionPool.front();
         connectionPool.pop();
-        idleConnections.erase(db);  // 从空闲连接列表中移除
+        connectionIdleTime.erase(db);  // 移除空闲时间记录
         return db;
     }
 
     // 如果没有空闲连接且未达到最大连接数，创建一个新的连接
-    if (static_cast<int>(connectionPool.size() + idleConnections.size()) < maxPoolSize) {
+    if (currentConnectionCount < maxPoolSize) {
         sqlite3* db = nullptr;
         if (sqlite3_open_v2(dbFile.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
             log(LogLevel::LOGERROR, "Can't open database: " + std::string(sqlite3_errmsg(db)));
+            return nullptr;  // 确保在失败时返回 nullptr
         } else {
+            ++currentConnectionCount;  // 增加连接计数
             return db;  // 动态创建新连接并返回
         }
     }
@@ -73,11 +76,11 @@ sqlite3* DBManager::getDbConnection() {
     return nullptr;
 }
 
-// 释放连接：将连接归还池中，并记录其空闲时间
+// 释放连接：将连接归还池中
 void DBManager::releaseDbConnection(sqlite3* db) {
     std::unique_lock<std::mutex> lock(poolMutex);
     connectionPool.push(db);
-    idleConnections[db] = std::chrono::steady_clock::now();  // 记录空闲时间
+    connectionIdleTime[db] = std::chrono::steady_clock::now();  // 记录空闲时间
     poolCondition.notify_one();  // 通知等待的线程
 }
 
@@ -86,15 +89,31 @@ void DBManager::cleanupIdleConnections() {
     std::unique_lock<std::mutex> lock(poolMutex);
     auto now = std::chrono::steady_clock::now();
 
-    for (auto it = idleConnections.begin(); it != idleConnections.end();) {
-        auto idleTime = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
-        if (idleTime >= maxIdleTimeSeconds) {
-            sqlite3_close(it->first);  // 关闭连接
-            it = idleConnections.erase(it);  // 从空闲连接列表中移除
-        } else {
-            ++it;
+    std::queue<sqlite3*> tempQueue;
+
+    while (!connectionPool.empty()) {
+        sqlite3* db = connectionPool.front();
+        connectionPool.pop();
+
+        // 检查连接的空闲时间
+        auto idleTimeIt = connectionIdleTime.find(db);
+        if (idleTimeIt != connectionIdleTime.end()) {
+            auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - idleTimeIt->second).count();
+            if (idleDuration >= maxIdleTimeSeconds) {
+                sqlite3_close(db);  // 关闭连接
+                --currentConnectionCount;  // 减少连接计数
+                connectionIdleTime.erase(idleTimeIt);  // 移除记录
+                continue;  // 不将此连接放回队列
+            }
         }
+
+        // 更新空闲时间
+        connectionIdleTime[db] = now;
+        tempQueue.push(db);
     }
+
+    // 将剩余的连接放回原始队列
+    connectionPool = std::move(tempQueue);
 }
 
 // 关闭所有连接：关闭池中所有连接
@@ -104,12 +123,9 @@ void DBManager::closeAllConnections() {
         sqlite3* db = connectionPool.front();
         connectionPool.pop();
         sqlite3_close(db);  // 关闭数据库连接
+        --currentConnectionCount;  // 减少连接计数
     }
-
-    for (const auto& idleConn : idleConnections) {
-        sqlite3_close(idleConn.first);  // 关闭所有空闲连接
-    }
-    idleConnections.clear();
+    connectionIdleTime.clear();
 }
 
 bool DBManager::createTables() {
@@ -151,7 +167,81 @@ bool DBManager::createTables() {
         }
         return true;
     };
+    // 创建请求统计表，如果不存在则创建
+    log(LogLevel::INFO, "Creating or updating request_statistics table...");
+    const char* requestTableSQL = "CREATE TABLE IF NOT EXISTS request_statistics ("
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                  "client_ip TEXT NOT NULL, "
+                                  "request_path TEXT NOT NULL, "
+                                  "http_method TEXT NOT NULL, "
+                                  "request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                                  "response_time INTEGER NOT NULL, "
+                                  "status_code INTEGER NOT NULL, "
+                                  "response_size INTEGER NOT NULL, "
+                                  "request_size INTEGER NOT NULL, "
+                                  "file_type TEXT, "
+                                  "request_latency INTEGER NOT NULL);";
+    rc = sqlite3_exec(db, requestTableSQL, 0, 0, &errMsg);
+    if (rc != SQLITE_OK) {
+        log(LogLevel::LOGERROR, "SQL error (Request Table): " + std::string(errMsg));
+        sqlite3_free(errMsg);
+        releaseDbConnection(db);
+        return false;
+    }
+    log(LogLevel::INFO, "Request statistics table created or exists already.");
 
+    // 创建按时间段请求次数最多的 URL 表
+    log(LogLevel::INFO, "Creating or updating top_urls_period table...");
+    const char* topUrlsPeriodTableSQL = "CREATE TABLE IF NOT EXISTS top_urls_period ("
+                                        "period_start TIMESTAMP NOT NULL, "
+                                        "url TEXT NOT NULL, "
+                                        "request_count INTEGER NOT NULL, "
+                                        "PRIMARY KEY (period_start, url));";
+    rc = sqlite3_exec(db, topUrlsPeriodTableSQL, 0, 0, &errMsg);
+    if (rc != SQLITE_OK) {
+        log(LogLevel::LOGERROR, "SQL error (Top URLs Period Table): " + std::string(errMsg));
+        sqlite3_free(errMsg);
+        releaseDbConnection(db);
+        return false;
+    }
+    log(LogLevel::INFO, "Top URLs by period table created or exists already.");
+
+    // 创建历史请求次数最多的 URL 表
+    log(LogLevel::INFO, "Creating or updating top_urls_history table...");
+    const char* topUrlsHistoryTableSQL = "CREATE TABLE IF NOT EXISTS top_urls_history ("
+                                         "url TEXT PRIMARY KEY, "
+                                         "total_request_count INTEGER NOT NULL);";
+    rc = sqlite3_exec(db, topUrlsHistoryTableSQL, 0, 0, &errMsg);
+    if (rc != SQLITE_OK) {
+        log(LogLevel::LOGERROR, "SQL error (Top URLs History Table): " + std::string(errMsg));
+        sqlite3_free(errMsg);
+        releaseDbConnection(db);
+        return false;
+    }
+    log(LogLevel::INFO, "Top URLs by history table created or exists already.");
+
+    // 创建服务使用统计表 (service_usage)
+    log(LogLevel::INFO, "Creating or updating service_usage table...");
+    const char* serviceUsageTableSQL = "CREATE TABLE IF NOT EXISTS service_usage ("
+                                       "period_start TIMESTAMP NOT NULL, "
+                                       "total_requests INTEGER NOT NULL, "
+                                       "successful_requests INTEGER NOT NULL, "
+                                       "failed_requests INTEGER NOT NULL, "
+                                       "total_request_size INTEGER NOT NULL, "
+                                       "total_response_size INTEGER NOT NULL, "
+                                       "unique_ips INTEGER NOT NULL, "
+                                       "max_concurrent_requests INTEGER NOT NULL, "
+                                       "max_response_time INTEGER NOT NULL, "
+                                       "avg_response_time INTEGER NOT NULL, "
+                                       "PRIMARY KEY (period_start));";
+    rc = sqlite3_exec(db, serviceUsageTableSQL, 0, 0, &errMsg);
+    if (rc != SQLITE_OK) {
+        log(LogLevel::LOGERROR, "SQL error (Service Usage Table): " + std::string(errMsg));
+        sqlite3_free(errMsg);
+        releaseDbConnection(db);
+        return false;
+    }
+    log(LogLevel::INFO, "Service usage table created or exists already.");
     // 创建用户表，如果不存在则创建
     log(LogLevel::INFO, "Creating or updating users table...");
     const char* userTableSQL = "CREATE TABLE IF NOT EXISTS users ("
@@ -324,7 +414,7 @@ bool DBManager::isUserRegistered(const std::string& telegramId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "isUserRegistered - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return userExists;
@@ -383,7 +473,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     sqlite3_stmt* checkStmt;
     int rc = sqlite3_prepare_v2(db, checkFileSQL.c_str(), -1, &checkStmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement addFile (File Check): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "addFile - Failed to prepare SELECT statement addFile (File Check): " + std::string(sqlite3_errmsg(db)));
         sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
         releaseDbConnection(db);
         return false;
@@ -595,7 +685,7 @@ int DBManager::getUserFileCount(const std::string& userId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getUserFileCount - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return count;
@@ -624,7 +714,7 @@ std::string DBManager::getFileIdByShortId(const std::string& shortId) {
         sqlite3_finalize(stmt);  // 释放 stmt 资源
     } else {
         // 如果查询失败，打印错误日志
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getFileIdByShortId - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
 
     // 打印日志
@@ -685,7 +775,7 @@ int DBManager::getTotalUserCount() {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getTotalUserCount - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return count;
@@ -709,7 +799,7 @@ std::vector<std::tuple<std::string, std::string, bool>> DBManager::getUsersForBa
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getUsersForBan - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return users;
@@ -728,7 +818,7 @@ bool DBManager::isUserBanned(const std::string& telegramId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "isUserBanned - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return isBanned;
@@ -783,7 +873,7 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> DBMa
         log(LogLevel::INFO, "Query completed. Fetched " + std::to_string(rowCount) + " files.");
     } else {
         // 记录 SQL 语句准备失败的错误
-        log(LogLevel::LOGERROR, "Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getImagesAndVideos - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return files;

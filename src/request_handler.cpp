@@ -201,7 +201,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     }
 
     // 异步将文件内容缓存到磁盘
-    auto future = std::async(std::launch::deferred, [&cacheManager, fileId, fileData, preferredExtension]() {
+    auto future = std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
         cacheManager.cacheImage(fileId, fileData, preferredExtension);
     });
 

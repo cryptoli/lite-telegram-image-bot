@@ -6,18 +6,19 @@
 #include "bot.h"
 #include "db_manager.h"
 #include "CacheManager.h"
+#include "StatisticsManager.h"
+#include "http_client.h"
+#include "PicGoHandler.h"
 #include <memory>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <map>
 #include <chrono>
-
-// 手动实现 make_unique
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
+#include <algorithm>
+#include <regex>
+#include <future>
+#include <nlohmann/json.hpp>
 
 // 获取客户端真实 IP 地址
 std::string getClientIp(const httplib::Request& req) {
@@ -35,40 +36,98 @@ std::string getClientIp(const httplib::Request& req) {
     return req.remote_addr;
 }
 
-// 统一处理媒体请求
-void handleMediaRequest(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager, const std::function<void(const httplib::Request&, httplib::Response&)>& handler) {
+void handleMediaRequestWithTiming(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager,
+                                  const std::function<void(const httplib::Request&, httplib::Response&)>& handler,
+                                  StatisticsManager& statisticsManager, ThreadPool& pool, int requestLatency) {
+    // 记录开始处理请求的时间
+    auto startProcessingTime = std::chrono::steady_clock::now();
+
+    // 调用实际处理函数
+    handler(req, res);
+
+    // 记录完成处理请求的时间
+    auto endProcessingTime = std::chrono::steady_clock::now();
+
+    // 计算响应时间
+    int responseTime = std::chrono::duration_cast<std::chrono::milliseconds>(endProcessingTime - startProcessingTime).count();
+
+    // 调用统计函数
+    handleRequestStatistics(req, res, req.path, statisticsManager, pool, responseTime, requestLatency);
+}
+
+// 处理请求统计信息
+void handleRequestStatistics(const httplib::Request& req, httplib::Response& res, const std::string& requestPath,
+                             StatisticsManager& statisticsManager, ThreadPool& pool, int responseTime, int requestLatency) {
+    // 获取客户端 IP 地址
     std::string clientIp = getClientIp(req);
-    
-    // 使用 CacheManager 处理限流
-    if (!cacheManager.checkRateLimit(clientIp, config.getRateLimitRequestsPerMinute())) {
-        log(LogLevel::INFO,"IP:" + clientIp + " 已超过一分钟内最大请求次数，已限制请求");
-        res.set_content("Too many requests", "text/plain");
-        res.status = 429;
-        return;
+
+    // 计算响应大小和请求大小
+    int responseSize = static_cast<int>(res.body.size());  // 响应的字节大小
+    int requestSize = static_cast<int>(req.body.size());   // 请求的字节大小
+
+    // 获取状态码
+    int statusCode = res.status;  // HTTP 响应状态码
+
+    // 获取请求方法
+    std::string httpMethod = req.method;
+
+    // 获取文件类型（根据请求路径确定）
+    std::string fileType = determineFileType(requestPath);
+
+    // 异步统计处理
+    pool.enqueue([=, &statisticsManager]() {
+        // 插入请求统计数据
+        statisticsManager.insertRequestStatistics(clientIp, requestPath, httpMethod, responseTime, statusCode,
+                                                  responseSize, requestSize, fileType, requestLatency);
+
+        // 更新服务使用统计数据
+        auto periodStart = std::chrono::system_clock::now();
+
+        // 以下统计数据需要根据实际情况计算，这里仅作为示例
+        int totalRequests = 1;  // 当前请求计数为 1
+        int successfulRequests = (statusCode >= 200 && statusCode < 300) ? 1 : 0;
+        int failedRequests = (statusCode >= 400) ? 1 : 0;
+        int totalRequestSize = requestSize;
+        int totalResponseSize = responseSize;
+        int uniqueIps = 1;  // 当前请求的 IP 数为 1
+        int maxConcurrentRequests = 1;  // 简化处理，实际应用中应计算并发请求数
+        int maxResponseTime = responseTime;
+        int avgResponseTime = responseTime;
+
+        statisticsManager.updateServiceUsage(periodStart, totalRequests, successfulRequests, failedRequests,
+                                             totalRequestSize, totalResponseSize, uniqueIps,
+                                             maxConcurrentRequests, maxResponseTime, avgResponseTime);
+    });
+}
+
+// 确定文件类型
+std::string determineFileType(const std::string& requestPath) {
+    std::string fileType = "unknown";
+    auto pos = requestPath.rfind('.');
+
+    if (pos != std::string::npos) {
+        std::string extension = requestPath.substr(pos + 1);
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower); // 转小写
+
+        // 根据扩展名确定文件类型
+        if (extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "gif" || extension == "bmp" || extension == "svg" || extension == "webp") {
+            fileType = "image";
+        } else if (extension == "mp4" || extension == "mkv" || extension == "avi" || extension == "mov" || extension == "flv" || extension == "wmv") {
+            fileType = "video";
+        } else if (extension == "mp3" || extension == "wav" || extension == "aac" || extension == "flac" || extension == "ogg") {
+            fileType = "audio";
+        } else if (extension == "txt" || extension == "html" || extension == "css" || extension == "js" || extension == "json" || extension == "xml") {
+            fileType = "text";
+        } else if (extension == "pdf" || extension == "doc" || extension == "docx" || extension == "xls" || extension == "xlsx" || extension == "ppt" || extension == "pptx") {
+            fileType = "document";
+        } else if (extension == "zip" || extension == "rar" || extension == "7z" || extension == "tar" || extension == "gz") {
+            fileType = "archive";
+        } else {
+            fileType = "other";
+        }
     }
 
-    if (config.enableReferers()) {
-    // 检查是否存在 Referer 头
-    if (!req.has_header("Referer")) {
-        log(LogLevel::INFO, "No Referer provided. Access denied.");
-        res.set_content("Forbidden", "text/plain");
-        res.status = 403;
-        return;
-    }
-
-    // 获取 Referer 并进行验证
-    std::string referer = req.get_header_value("Referer");
-
-    // 检查 Referer 是否在允许的范围内
-    if (!cacheManager.checkReferer(referer, config.getAllowedReferers())) {
-        log(LogLevel::INFO, "Invalid Referer. Access denied.");
-        res.set_content("Forbidden", "text/plain");
-        res.status = 403;
-        return;
-    }
-    }
-
-    handler(req, res);  // 调用实际处理函数
+    return fileType;
 }
 
 // 加载模板文件
@@ -81,6 +140,9 @@ std::string loadTemplate(const std::string& filepath) {
 }
 
 void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter, DBManager& dbManager) {
+    // 初始化统计管理器
+    StatisticsManager statisticsManager(dbManager);
+
     std::string apiToken = config.getApiToken();
     std::string hostname = config.getHostname();
     std::string secretToken = config.getSecretToken();
@@ -90,38 +152,79 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     bool allowRegistration = config.getAllowRegistration();
     auto mimeTypes = config.getMimeTypes();
 
+    PicGoHandler picGoHandler(config);
+
     std::unique_ptr<httplib::Server> svr;
     if (useHttps) {
         std::string certPath = config.getSslCertificate();
         std::string keyPath = config.getSslKey();
-        svr = make_unique<httplib::SSLServer>(certPath.c_str(), keyPath.c_str());
+        svr = std::make_unique<httplib::SSLServer>(certPath.c_str(), keyPath.c_str());
     } else {
-        svr = make_unique<httplib::Server>();
+        svr = std::make_unique<httplib::Server>();
     }
 
-    // 定义一个通用的媒体请求处理函数
     auto mediaRequestHandler = [&apiToken, &mimeTypes, &cacheManager, &rateLimiter, &telegramApiUrl, &config, &dbManager](const httplib::Request& req, httplib::Response& res) {
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config, dbManager);
     };
 
-    // 为五个路由设置通用的限流和 referer 验证
-    svr->Get(R"(/images/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
-    });
-    svr->Get(R"(/files/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
-    });
-    svr->Get(R"(/videos/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
-    });
-    svr->Get(R"(/audios/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
-    });
-    svr->Get(R"(/stickers/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
-    });
-    svr->Get(R"(/d/([^\s/]+))", [&config, &rateLimiter, mediaRequestHandler](const httplib::Request& req, httplib::Response& res) {
-        handleMediaRequest(req, res, config, rateLimiter, mediaRequestHandler);
+    // 为路由设置通用的限流、Referer 验证和统计处理
+    auto registerMediaRoute = [&](const std::string& pattern) {
+        svr->Get(pattern, [&config, &rateLimiter, mediaRequestHandler, &statisticsManager, &pool](const httplib::Request& req, httplib::Response& res) {
+            // 记录请求到达时间
+            auto requestArrivalTime = std::chrono::steady_clock::now();
+
+            // 获取客户端 IP 地址
+            std::string clientIp = req.remote_addr;
+
+            // 进行限流检查
+            int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
+            if (!rateLimiter.checkRateLimit(clientIp, maxRequestsPerMinute)) {
+                res.status = 429;
+                res.set_content("Too Many Requests", "text/plain");
+                return;
+            }
+
+            if (config.enableReferers()) {
+                std::string referer = req.get_header_value("Referer");
+                if (referer.empty()) {
+                    res.status = 403;
+                    res.set_content("Forbidden", "text/plain");
+                    return;
+                }
+
+                // 获取允许的 Referer 列表
+                std::vector<std::string> allowedReferers = config.getAllowedReferers();
+                std::unordered_set<std::string> allowedReferersSet(allowedReferers.begin(), allowedReferers.end());
+
+                // 检查 Referer 是否在允许的列表中
+                if (!rateLimiter.checkReferer(referer, allowedReferersSet)) {
+                    res.status = 403;
+                    res.set_content("Forbidden", "text/plain");
+                    return;
+                }
+            }
+            auto startProcessingTime = std::chrono::steady_clock::now();
+
+            // 计算请求延迟
+            int requestLatency = std::chrono::duration_cast<std::chrono::milliseconds>(startProcessingTime - requestArrivalTime).count();
+            handleMediaRequestWithTiming(req, res, config, rateLimiter, mediaRequestHandler, statisticsManager, pool, requestLatency);
+        });
+    };
+
+    registerMediaRoute(R"(/images/(.*))");
+    registerMediaRoute(R"(/files/(.*))");
+    registerMediaRoute(R"(/videos/(.*))");
+    registerMediaRoute(R"(/audios/(.*))");
+    registerMediaRoute(R"(/stickers/(.*))");
+    registerMediaRoute(R"(/d/(.*))");
+
+    svr->Post("/upload", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_header("X-Telegram-Bot-Api-Secret-Token") || req.get_header_value("X-Telegram-Bot-Api-Secret-Token") != secretToken) {
+            res.set_content("Unauthorized", "text/plain");
+            res.status = 401;
+            return;
+        }
+        picGoHandler.handleUpload(req, res, config.getOwnerId(), "", dbManager);
     });
 
     // Webhook 路由
@@ -139,13 +242,19 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         } catch (const std::exception& e) {
             log(LogLevel::LOGERROR, "Error processing Webhook: " + std::string(e.what()));
             res.set_content("Bad Request", "text/plain");
+            res.status = 400;
         }
     });
 
     // 注册和登录页面路由
     svr->Get("/login", [](const httplib::Request& req, httplib::Response& res) {
-        std::string html = loadTemplate("templates/login.html");
-        res.set_content(html, "text/html");
+        try {
+            std::string html = loadTemplate("templates/login.html");
+            res.set_content(html, "text/html");
+        } catch (const std::exception& e) {
+            res.set_content("Error loading page", "text/plain");
+            res.status = 500;
+        }
     });
 
     svr->Get("/register", [allowRegistration](const httplib::Request& req, httplib::Response& res) {
@@ -153,12 +262,17 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             res.set_content("<h1>Registration is not allowed.</h1>", "text/html");
             return;
         }
-        std::string html = loadTemplate("templates/register.html");
-        res.set_content(html, "text/html");
+        try {
+            std::string html = loadTemplate("templates/register.html");
+            res.set_content(html, "text/html");
+        } catch (const std::exception& e) {
+            res.set_content("Error loading page", "text/plain");
+            res.status = 500;
+        }
     });
 
-    // 首页路由
-    svr->Get("/", [&dbManager](const httplib::Request& req, httplib::Response& res) {
+    // 图片页面
+    svr->Get("/pic", [&dbManager](const httplib::Request& req, httplib::Response& res) {
         int page = req.has_param("page") ? std::stoi(req.get_param_value("page")) : 1;
         int pageSize = 10;
 
@@ -170,7 +284,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             const std::string& fileLink = std::get<2>(media);
             const std::string& extension = std::get<3>(media);
 
-            std::string mediaType = (extension == ".mp4" || extension == ".mkv" || extension == ".avi" || extension == ".mov") ? "video" : "image";
+            std::string mediaType = (extension == ".mp4" || extension == ".mkv" || extension == ".avi" || extension == ".mov" || extension == ".flv" || extension == ".wmv") ? "video" : "image";
             galleryHtml += "<div class=\"media-item\">";
             if (mediaType == "image") {
                 galleryHtml += "<img src=\"" + fileLink + "\" alt=\"" + fileName + "\" class=\"media-preview\">";
@@ -180,9 +294,31 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             galleryHtml += "<div class=\"media-name\">" + fileName + "</div></div>";
         }
 
-        std::string html = loadTemplate("templates/index.html");
-        html.replace(html.find("{{gallery}}"), 11, galleryHtml);
-        res.set_content(html, "text/html");
+        try {
+            std::string html = loadTemplate("templates/index.html");
+            size_t pos = html.find("{{gallery}}");
+            if (pos != std::string::npos) {
+                html.replace(pos, 11, galleryHtml);
+            }
+            res.set_content(html, "text/html");
+        } catch (const std::exception& e) {
+            res.set_content("Error loading page", "text/plain");
+            res.status = 500;
+        }
+    });
+
+    svr->Get("/", [allowRegistration](const httplib::Request& req, httplib::Response& res) {
+        if (!allowRegistration) {
+            res.set_content("<h1>Registration is not allowed.</h1>", "text/html");
+            return;
+        }
+        try {
+            std::string html = loadTemplate("templates/register.html");
+            res.set_content(html, "text/html");
+        } catch (const std::exception& e) {
+            res.set_content("Error loading page", "text/plain");
+            res.status = 500;
+        }
     });
 
     // 启动服务器
@@ -199,5 +335,4 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         log(LogLevel::LOGERROR, "System error occurred: " + std::string(e.what()));
         throw;
     }
-
 }

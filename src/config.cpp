@@ -151,3 +151,11 @@ std::vector<std::string> Config::getAllowedReferers() const {
 int Config::getRateLimitRequestsPerMinute() const {
     return configData["security"]["rate_limit"]["requests_per_minute"].get<int>();
 }
+
+std::string Config::getTelegramChannelId() const {
+    const char* channelId = std::getenv("TELEGRAM_CHANNEL_ID");
+    if (channelId != nullptr) {
+        return std::string(channelId);
+    }
+    return configData["channel_id"].get<std::string>();
+}

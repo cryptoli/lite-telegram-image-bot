@@ -74,11 +74,11 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     // 记录文件到数据库并发送消息
     if (dbManager.addUserIfNotExists(userId, username)) {
         dbManager.addFile(userId, fileId, customUrl, fileName, shortId, customUrl, "");
-        sendMessage(chatId, formattedMessage);  // 确保在这里发送消息
+        sendMessage(chatId, formattedMessage);
+        log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
     }
-    log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
 }
 
 // 修改的 /my 命令，支持分页并通过按钮切换上下页

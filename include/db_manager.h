@@ -20,6 +20,9 @@ public:
     DBManager(const DBManager&) = delete;
     DBManager& operator=(const DBManager&) = delete;
 
+    sqlite3* getDbConnection();
+    void releaseDbConnection(sqlite3* db);
+
     bool initialize();
     bool createTables();
     bool addUserIfNotExists(const std::string& telegramId, const std::string& username);
@@ -45,6 +48,8 @@ private:
     int maxIdleTimeSeconds;
     std::atomic<bool> stopThread;
     std::thread cleanupThread;
+    int currentConnectionCount;  // 当前连接总数，包括空闲和正在使用的连接
+    std::unordered_map<sqlite3*, std::chrono::steady_clock::time_point> connectionIdleTime;
 
     DBManager(const std::string& dbFile, int maxPoolSize, int maxIdleTimeSeconds);
     ~DBManager();
@@ -54,12 +59,10 @@ private:
     std::mutex poolMutex;
     std::condition_variable poolCondition;
 
-    sqlite3* getDbConnection();
-    void releaseDbConnection(sqlite3* db);
     void initializePool();
     void cleanupIdleConnections();
     void closeAllConnections();
-     void stopPoolThread();
+    void stopPoolThread();
 };
 
 #endif
