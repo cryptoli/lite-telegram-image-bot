@@ -50,10 +50,13 @@ std::string getFileExtension(const std::string& filePath) {
 // 处理流式传输的回调函数，支持分段传输
 size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Response* res) {
     size_t totalSize = size * nmemb;
-    
-    // 直接向客户端流式发送响应
     if (totalSize > 0) {
         res->body.append(static_cast<char*>(ptr), totalSize);
+
+        // 增加内存控制，防止过度积累
+        if (res->body.size() > 102400) { // 超过100KB时清空body
+            res->body.clear();  // 清理body内容，防止内存占用过多
+        }
     }
     return totalSize;
 }
@@ -75,7 +78,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
 
     // 增加缓冲区大小
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);  // 增加缓冲区至100KB
 
     // 设置请求超时
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
@@ -218,8 +221,8 @@ void setHttpResponse(httplib::Response& res, const std::string& fileData, const 
     // 添加 HTTP 缓存控制头
     res.set_header("Cache-Control", "max-age=3600");
 
-    // 检查客户端是否支持 Gzip 压缩
-    if (req.has_header("Accept-Encoding") && req.get_header_value("Accept-Encoding").find("gzip") != std::string::npos) {
+    // 对小文件启用压缩以节省内存占用
+    if (fileData.size() < 1048576 && req.has_header("Accept-Encoding") && req.get_header_value("Accept-Encoding").find("gzip") != std::string::npos) {
         std::string compressedData = gzipCompress(fileData);
         res.set_content(compressedData, mimeType);
         res.set_header("Content-Encoding", "gzip");
