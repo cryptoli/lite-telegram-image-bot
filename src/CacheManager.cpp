@@ -12,50 +12,62 @@ CacheManager::~CacheManager() {
     stopCleanupThread();
 }
 
-// 添加缓存
 void CacheManager::addCache(const std::string& key, const std::string& data, int ttlSeconds) {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    if (cacheMap.size() >= maxCacheSize) {
-        cacheMap.erase(cacheMap.begin());
-    }
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(ttlSeconds);
-    cacheMap[key] = {data, expirationTime};
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        if (cacheMap.size() >= maxCacheSize) {
+            cacheMap.erase(cacheMap.begin());
+        }
+        cacheMap[key] = CacheItem{std::make_unique<std::string>(data), expirationTime};;
+    } 
 }
 
-// 获取缓存
 bool CacheManager::getCache(const std::string& key, std::string& data) {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    auto it = cacheMap.find(key);
-    if (it != cacheMap.end()) {
-        if (std::chrono::steady_clock::now() > it->second.expirationTime) {
-            cacheMap.erase(it);
-            return false;
+    auto now = std::chrono::steady_clock::now();
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        auto it = cacheMap.find(key);
+        if (it != cacheMap.end()) {
+            if (now > it->second.expirationTime) {
+                cacheMap.erase(it);
+                return false;
+            }
+            data = *(it->second.data);
+            return true;
         }
-        data = it->second.data;
-        return true;
     }
     return false;
 }
 
 void CacheManager::addFilePathCache(const std::string& fileId, const std::string& filePath, int ttlSeconds) {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    if (fileExtensionCache.size() >= maxCacheSize) {
-        fileExtensionCache.erase(cacheMap.begin());
-    }
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(ttlSeconds);
-    fileExtensionCache[fileId] = {filePath, expirationTime};  // 存储文件后缀缓存
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex); 
+        if (fileExtensionCache.size() >= maxCacheSize) {
+            fileExtensionCache.erase(fileExtensionCache.begin());
+        }
+        fileExtensionCache[fileId] = CacheItem{std::make_unique<std::string>(filePath), expirationTime};
+    }
 }
 
 bool CacheManager::getFilePathCache(const std::string& fileId, std::string& filePath) {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    auto it = fileExtensionCache.find(fileId);
-    if (it != fileExtensionCache.end()) {
-        if (std::chrono::steady_clock::now() > it->second.expirationTime) {
-            fileExtensionCache.erase(it);
-            return false;
+    auto now = std::chrono::steady_clock::now();
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        auto it = fileExtensionCache.find(fileId);
+        if (it != fileExtensionCache.end()) {
+            if (now > it->second.expirationTime) {
+                fileExtensionCache.erase(it);
+                return false;
+            }
+            filePath = *(it->second.data);
+            return true;
         }
-        filePath = it->second.data;
-        return true;
     }
     return false;
 }
@@ -68,8 +80,9 @@ void CacheManager::deleteCache(const std::string& key) {
 
 // 限流检查
 bool CacheManager::checkRateLimit(const std::string& clientIp, int maxRequestsPerMinute) {
+    auto now = std::chrono::steady_clock::now();  // 先计算当前时间，不需要加锁
+
     std::lock_guard<std::mutex> lock(cacheMutex);
-    auto now = std::chrono::steady_clock::now();
     auto& info = rateLimitMap[clientIp];
 
     if (std::chrono::duration_cast<std::chrono::seconds>(now - info.lastRequestTime).count() > 60) {
@@ -110,29 +123,33 @@ void CacheManager::cleanupExpiredRateLimitData() {
 
 // 清理过期缓存
 void CacheManager::cleanupExpiredCache() {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    auto now = std::chrono::steady_clock::now();
-    
-    // 清理缓存数据
-    for (auto it = cacheMap.begin(); it != cacheMap.end();) {
-        if (now > it->second.expirationTime) {
-            it = cacheMap.erase(it);
-        } else {
-            ++it;
+    auto now = std::chrono::steady_clock::now();  // 计算当前时间不需要锁
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        // 清理缓存数据
+        for (auto it = cacheMap.begin(); it != cacheMap.end();) {
+            if (now > it->second.expirationTime) {
+                it = cacheMap.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    } 
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        // 清理文件后缀缓存
+        for (auto it = fileExtensionCache.begin(); it != fileExtensionCache.end();) {
+            if (now > it->second.expirationTime) {
+                it = fileExtensionCache.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 
-    // 清理文件后缀缓存
-    for (auto it = fileExtensionCache.begin(); it != fileExtensionCache.end();) {
-        if (now > it->second.expirationTime) {
-            it = fileExtensionCache.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    // 清理过期的限流数据
-    cleanupExpiredRateLimitData();
+    cleanupExpiredRateLimitData(); 
 }
 
 // 启动清理线程

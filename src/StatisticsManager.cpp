@@ -87,7 +87,7 @@ void StatisticsManager::executeSQL(const std::string& query, const std::vector<S
             const SQLParam& param = params[i];
             switch (param.type) {
                 case SQLParam::Type::Text:
-                    sqlite3_bind_text(stmt, index, param.textValue.c_str(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(stmt, index, std::move(param.textValue.c_str()), -1, SQLITE_TRANSIENT);
                     break;
                 case SQLParam::Type::Int:
                     sqlite3_bind_int(stmt, index, param.intValue);
@@ -344,7 +344,7 @@ std::vector<std::tuple<std::string, int>> StatisticsManager::getTopUrlsByPeriod(
             if (param.type == SQLParam::Type::Int) {
                 sqlite3_bind_int(stmt, index, param.intValue);
             } else if (param.type == SQLParam::Type::Text) {
-                sqlite3_bind_text(stmt, index, param.textValue.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(stmt, index, std::move(param.textValue.c_str()), -1, SQLITE_TRANSIENT);
             }
         }
 
@@ -395,7 +395,7 @@ int StatisticsManager::executeCountQuery(const std::string& query, const std::ve
             if (param.type == SQLParam::Type::Int) {
                 sqlite3_bind_int(stmt, index, param.intValue);
             } else if (param.type == SQLParam::Type::Text) {
-                sqlite3_bind_text(stmt, index, param.textValue.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(stmt, index, std::move(param.textValue.c_str()), -1, SQLITE_TRANSIENT);
             }
         }
 

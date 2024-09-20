@@ -6,22 +6,20 @@
 #include <fstream>
 #include "db_manager.h"
 
-Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbManager(dbManager) {
+static const std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
+    {"photo", "images", "🖼️", "图片"},
+    {"document", "files", "📄", "文件"},
+    {"video", "videos", "🎥", "视频"},
+    {"audio", "audios", "🎵", "音频"},
+    {"sticker", "stickers", "📝", "贴纸"}
+};
+
+Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbManager(dbManager), config("config.json") {
     initializeOwnerId();  // 初始化时获取Bot的所属者ID
 }
 
 // 处理文件并发送文件链接（适用于不同文件类型）
 void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message, const std::string& username) {
-    // 定义支持的文件类型及对应的属性
-    std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
-        {"photo", "images", "🖼️", "图片"},
-        {"document", "files", "📄", "文件"},
-        {"video", "videos", "🎥", "视频"},
-        {"audio", "audios", "🎵", "音频"},
-        // {"animation", "gifs", "🎬", "GIF"},
-        {"sticker", "stickers", "📝", "贴纸"}
-    };
-
     bool fileProcessed = false;  // 用于检查是否处理了至少一个文件
 
     for (const auto& fileType : fileTypes) {
@@ -54,7 +52,10 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
 // 创建并发送文件链接
 void Bot::createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName, const std::string& username) {
     std::string shortId = generateShortLink(fileId);
-    std::string customUrl = baseUrl + "/" + fileType + "/" + shortId;
+    // std::string customUrl = baseUrl + "/" + fileType + "/" + shortId;
+    std::ostringstream customUrlStream;
+    customUrlStream << baseUrl << "/" << fileType << "/" << shortId;
+    std::string customUrl = customUrlStream.str();
     std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
 
     // 多线程环境下，独立创建数据库连接
@@ -315,7 +316,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             std::string userId = std::to_string(message["from"]["id"].get<int64_t>());
             std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
-            Config config("config.json");
+            // Config config("config.json");
 
             std::string baseUrl = config.getWebhookUrl();
 
@@ -384,7 +385,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
 
 // collect命令：收集并保存文件
 void Bot::collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage) {
-    Config config("config.json");
+    // Config config("config.json");
     std::string baseUrl = config.getWebhookUrl();
     handleFileAndSend(chatId, userId, baseUrl, replyMessage, username);
 }
@@ -508,7 +509,7 @@ void Bot::closeRegister(const std::string& chatId) {
 }
 
 void Bot::initializeOwnerId() {
-    Config config("config.json");
+    // Config config("config.json");
     ownerId = config.getOwnerId();
     telegramApiUrl = config.getTelegramApiUrl();
     log(LogLevel::INFO, "Bot owner ID initialized: " + ownerId);
