@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <map>
 #include "db_manager.h"
+#include "config.h"
 
 class Bot {
 public:
@@ -36,6 +37,7 @@ private:
     std::string telegramApiUrl;
     std::string ownerId;
     DBManager& dbManager;
+    Config config;
 };
 
 #endif

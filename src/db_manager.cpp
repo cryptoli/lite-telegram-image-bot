@@ -39,7 +39,6 @@ void DBManager::stopPoolThread() {
     stopThread.store(true);  // 将 stopThread 置为 true
 }
 
-// 获取连接：从连接池中获取一个连接，如果没有可用连接则动态创建
 sqlite3* DBManager::getDbConnection() {
     std::unique_lock<std::mutex> lock(poolMutex);  // 确保线程安全
 
@@ -51,7 +50,7 @@ sqlite3* DBManager::getDbConnection() {
         return db;
     }
 
-    // 如果没有空闲连接且未达到最大连接数，创建一个新的连接
+    // 如果没有空闲连接且未达到最大连接数，按需创建新的连接
     if (currentConnectionCount < maxPoolSize) {
         sqlite3* db = nullptr;
         if (sqlite3_open_v2(dbFile.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
@@ -407,7 +406,7 @@ bool DBManager::isUserRegistered(const std::string& telegramId) {
     bool userExists = false;
 
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, telegramId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, std::move(telegramId.c_str()), -1, SQLITE_STATIC);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             int count = sqlite3_column_int(stmt, 0);
             userExists = (count > 0);
@@ -445,8 +444,8 @@ bool DBManager::addUserIfNotExists(const std::string& telegramId, const std::str
         return false;
     }
 
-    sqlite3_bind_text(stmt, 1, telegramId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(telegramId.c_str()), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, std::move(username.c_str()), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -480,7 +479,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     }
 
     // 绑定 file_id 参数
-    sqlite3_bind_text(checkStmt, 1, fileId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(checkStmt, 1, std::move(fileId.c_str()), -1, SQLITE_STATIC);
     rc = sqlite3_step(checkStmt);
     
     if (rc != SQLITE_ROW) {
@@ -515,12 +514,12 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         }
 
         // 绑定更新语句的参数
-        sqlite3_bind_text(updateStmt, 1, fileLink.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(updateStmt, 2, fileName.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(updateStmt, 3, shortId.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(updateStmt, 4, shortLink.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(updateStmt, 5, extension.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(updateStmt, 6, fileId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 1, std::move(fileLink.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 2, std::move(fileName.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 3, std::move(shortId.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 4, std::move(shortLink.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 5, std::move(extension.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(updateStmt, 6, std::move(fileId.c_str()), -1, SQLITE_STATIC);
 
         rc = sqlite3_step(updateStmt);
         sqlite3_finalize(updateStmt);
@@ -547,13 +546,13 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         }
 
         // 绑定插入语句的参数
-        sqlite3_bind_text(insertStmt, 1, userId.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 2, fileId.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 3, fileLink.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 4, fileName.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 5, shortId.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 6, shortLink.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(insertStmt, 7, extension.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 1, std::move(userId.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 2, std::move(fileId.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 3, std::move(fileLink.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 4, std::move(fileName.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 5, std::move(shortId.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 6, std::move(shortLink.c_str()), -1, SQLITE_STATIC);
+        sqlite3_bind_text(insertStmt, 7, std::move(extension.c_str()), -1, SQLITE_STATIC);
 
         rc = sqlite3_step(insertStmt);
         sqlite3_finalize(insertStmt);
@@ -588,8 +587,8 @@ bool DBManager::removeFile(const std::string& userId, const std::string& fileNam
 
     log(LogLevel::INFO, "Attempting to delete file with userId: " + userId + " and fileName: " + fileName);
 
-    sqlite3_bind_text(stmt, 1, fileName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, userId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(fileName.c_str()), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, std::move(userId.c_str()), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE) {
@@ -624,7 +623,7 @@ bool DBManager::banUser(const std::string& telegramId) {
         return false;
     }
 
-    sqlite3_bind_text(stmt, 1, telegramId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(telegramId.c_str()), -1, SQLITE_STATIC);
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     releaseDbConnection(db);
@@ -642,7 +641,7 @@ bool DBManager::unbanUser(const std::string& telegramId) {
         return false;
     }
 
-    sqlite3_bind_text(stmt, 1, telegramId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(telegramId.c_str()), -1, SQLITE_STATIC);
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     releaseDbConnection(db);
@@ -656,7 +655,7 @@ std::vector<std::tuple<std::string, std::string, std::string>> DBManager::getUse
 
     sqlite3_stmt* stmt;
     sqlite3_prepare_v2(db, selectSQL.c_str(), -1, &stmt, nullptr);
-    sqlite3_bind_text(stmt, 1, userId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(userId.c_str()), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 2, pageSize);
     sqlite3_bind_int(stmt, 3, (page - 1) * pageSize);
 
@@ -679,7 +678,7 @@ int DBManager::getUserFileCount(const std::string& userId) {
     int count = 0;
 
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, userId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, std::move(userId.c_str()), -1, SQLITE_STATIC);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             count = sqlite3_column_int(stmt, 0);
         }
@@ -700,7 +699,7 @@ std::string DBManager::getFileIdByShortId(const std::string& shortId) {
     // 准备 SQL 语句
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
         // 绑定 shortId 参数
-        sqlite3_bind_text(stmt, 1, shortId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, std::move(shortId.c_str()), -1, SQLITE_STATIC);
 
         // 执行查询并获取结果
         if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -729,7 +728,7 @@ void DBManager::setRegistrationOpen(bool isOpen) {
     std::string updateSQL = "INSERT OR REPLACE INTO settings (key, value) VALUES ('registration', ?)";
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(db, updateSQL.c_str(), -1, &stmt, nullptr);
-    sqlite3_bind_text(stmt, 1, isOpen ? "1" : "0", -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, std::move(isOpen ? "1" : "0"), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -812,7 +811,7 @@ bool DBManager::isUserBanned(const std::string& telegramId) {
     bool isBanned = false;
 
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, telegramId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, std::move(telegramId.c_str()), -1, SQLITE_STATIC);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             isBanned = sqlite3_column_int(stmt, 0) == 1;
         }
@@ -828,10 +827,6 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> DBMa
     std::vector<std::tuple<std::string, std::string, std::string, std::string>> files;
     int offset = (page - 1) * pageSize;
 
-    // 记录开始查询的日志
-    log(LogLevel::INFO, "Starting image and video query. Page: " + std::to_string(page) + ", Page Size: " + std::to_string(pageSize));
-
-    // 包含 extension 字段的查询
     std::string selectSQL = R"(
         SELECT DISTINCT file_id, file_name, file_link, extension
         FROM files 
@@ -845,36 +840,25 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> DBMa
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db, selectSQL.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        // 记录 SQL 语句准备成功
-        log(LogLevel::INFO, "SQL statement prepared successfully.");
-
-        // 绑定分页参数
         sqlite3_bind_int(stmt, 1, pageSize);
         sqlite3_bind_int(stmt, 2, offset);
 
-        int rowCount = 0; // 用于记录返回的行数
-
-        // 提取数据并记录每条记录
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            std::string fileId = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            std::string fileName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            std::string fileLink = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-            std::string extension = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-            files.emplace_back(fileId, fileName, fileLink, extension);
+            // 避免重复构造 std::string 对象
+            const char* fileId = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            const char* fileName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            const char* fileLink = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            const char* extension = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
 
-            // 记录每次提取的文件信息
-            log(LogLevel::INFO, "Fetched file: ID = " + fileId + ", Name = " + fileName + ", Link = " + fileLink + ", Extension = " + extension);
-            rowCount++;
+            // 直接构造 std::tuple 并减少字符串拷贝
+            files.emplace_back(fileId ? fileId : "", fileName ? fileName : "", fileLink ? fileLink : "", extension ? extension : "");
         }
         
         sqlite3_finalize(stmt);
-
-        // 记录查询结果数量
-        log(LogLevel::INFO, "Query completed. Fetched " + std::to_string(rowCount) + " files.");
     } else {
-        // 记录 SQL 语句准备失败的错误
         log(LogLevel::LOGERROR, "getImagesAndVideos - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
     }
+
     releaseDbConnection(db);
     return files;
 }

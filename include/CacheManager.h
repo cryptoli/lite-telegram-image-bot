@@ -12,7 +12,7 @@
 
 // 缓存项结构
 struct CacheItem {
-    std::string data;
+    std::unique_ptr<std::string> data;
     std::chrono::steady_clock::time_point expirationTime;
 };
 
