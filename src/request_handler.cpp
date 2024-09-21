@@ -51,10 +51,9 @@ std::string getFileExtension(const std::string& filePath) {
 size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     size_t totalSize = size * nmemb;
     if (totalSize > 0) {
-        httplib::Stream* stream = static_cast<httplib::Stream*>(userdata);
-
-        // 直接将数据写入响应流
-        stream->write(static_cast<char*>(ptr), totalSize);
+        // 将数据块追加到 buffer 中
+        std::string* buffer = static_cast<std::string*>(userdata);
+        buffer->append(static_cast<char*>(ptr), totalSize);
     }
     return totalSize;
 }
@@ -67,32 +66,50 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
         return;
     }
 
+    // 设置 CURL 选项
     curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
     curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65536L);  // 使用 64KB 的缓冲区
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 
-    // 使用流式回调处理数据，传递 res 的指针作为 userdata
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<size_t(*)(void*, size_t, size_t, void*)>(streamWriteCallback));
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将 res 的指针传递给回调函数
+    // 临时缓冲区用于存储从 CURL 接收到的数据块
+    std::string buffer;
 
-    // 处理分段请求
+    // 使用流式回调处理数据，传递 buffer 的指针作为 userdata
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<size_t(*)(void*, size_t, size_t, void*)>(streamWriteCallback));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);  // 传递缓冲区的指针
+
+    // 处理分段请求 (Range Request)
     if (req.has_header("Range")) {
         std::string rangeHeader = req.get_header_value("Range");
         curl_easy_setopt(curl, CURLOPT_RANGE, rangeHeader.c_str());
     }
 
-    CURLcode res_code = curl_easy_perform(curl);
-    if (res_code != CURLE_OK) {
-        log(LogLevel::LOGERROR, "CURL error: " + std::string(curl_easy_strerror(res_code)));
-        res.status = 500;
-        res.set_content("Failed to stream file", "text/plain");
-    }
+    // 设置响应头
+    res.set_header("Content-Type", mimeType.c_str());
 
-    curl_easy_cleanup(curl);
+    // 使用 ContentProvider 实现流式传输
+    res.set_content_provider(
+        std::numeric_limits<size_t>::max(),  // 设置为最大值，表示流式传输大小不固定
+        mimeType,
+        [curl, &buffer](size_t offset, size_t length, httplib::DataSink& sink) {
+            CURLcode res_code = curl_easy_perform(curl);  // 执行 CURL 请求
 
-    std::string().swap(res.body);
+            if (res_code != CURLE_OK) {
+                sink.write(buffer.data(), buffer.size());  // 将当前缓冲区数据写入 sink
+                buffer.clear();  // 清空缓冲区
+                return false;  // 数据传输结束，停止
+            }
+
+            sink.write(buffer.data(), buffer.size());  // 将缓冲区的数据写入 sink
+            buffer.clear();  // 清空缓冲区
+            return true;  // 继续传输
+        },
+        [curl](bool success) {
+            curl_easy_cleanup(curl);  // 清理 CURL 资源
+        }
+    );
 }
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config, DBManager& dbManager) {
