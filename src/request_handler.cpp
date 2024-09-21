@@ -53,9 +53,8 @@ size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Respon
     if (totalSize > 0) {
         res->body.append(static_cast<char*>(ptr), totalSize);
 
-        // 增加内存控制，防止过度积累
-        if (res->body.size() > 102400) { // 超过100KB时清空body
-            res->body.clear();  // 清理body内容，防止内存占用过多
+        if (res->body.size() > 102400) {
+            res->body.clear();
         }
     }
     return totalSize;
@@ -77,8 +76,8 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
 
-    // 增加缓冲区大小
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);  // 增加缓冲区至100KB
+    // 增加缓冲区大小，减少内存占用
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65536L);  // 使用 64KB 的缓冲区
 
     // 设置请求超时
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
@@ -102,18 +101,6 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
         res.status = 500;
         res.set_content("Failed to stream file", "text/plain");
     }
-
-    // 获取文件总大小并设置头信息
-    curl_off_t contentLength = 0;
-    curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength);
-
-    std::ostringstream contentLengthStr;
-    contentLengthStr << static_cast<int64_t>(contentLength);
-    res.set_header("Content-Length", contentLengthStr.str());
-    
-    // 设置视频文件类型和支持分段下载
-    res.set_header("Content-Type", mimeType);
-    res.set_header("Accept-Ranges", "bytes");  // 支持分段下载
 
     curl_easy_cleanup(curl);
 }
@@ -203,28 +190,22 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         return;
     }
 
-    // 异步将文件内容缓存到磁盘
-    auto future = std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
+    std::future<void> cacheFuture = std::async(std::launch::async, [&cacheManager, fileId, fileData, preferredExtension]() {
         cacheManager.cacheImage(fileId, fileData, preferredExtension);
     });
 
-    future.get();
-
-    // 返回文件，添加 HTTP 缓存控制和 Gzip 支持
+    // 返回文件
     std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
     setHttpResponse(res, fileData, mimeType, req);
     log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
 }
 
-
 void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req) {
-    // 添加 HTTP 缓存控制头
     res.set_header("Cache-Control", "max-age=3600");
 
     // 对小文件启用压缩以节省内存占用
     if (fileData.size() < 1048576 && req.has_header("Accept-Encoding") && req.get_header_value("Accept-Encoding").find("gzip") != std::string::npos) {
-        std::string compressedData = gzipCompress(fileData);
-        res.set_content(compressedData, mimeType);
+        res.set_content(gzipCompress(fileData), mimeType);
         res.set_header("Content-Encoding", "gzip");
     } else {
         res.set_content(fileData, mimeType);

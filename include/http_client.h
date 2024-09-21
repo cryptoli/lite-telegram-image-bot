@@ -5,5 +5,6 @@
 
 std::string sendHttpRequest(const std::string& url);
 std::string buildTelegramUrl(const std::string& text);
+std::string escapeTelegramUrl(const std::string& text);
 
 #endif

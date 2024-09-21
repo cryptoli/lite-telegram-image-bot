@@ -5,6 +5,7 @@
 #include "utils.h"
 #include <fstream>
 #include "db_manager.h"
+#include <iostream>
 
 static const std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
     {"photo", "images", "🖼️", "图片"},
@@ -45,7 +46,8 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
 
     // 如果没有处理任何文件，提示用户
     if (!fileProcessed) {
-        sendMessage(chatId, "请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url");
+        sendMessage(chatId, "**请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url；将我拉入群聊使用/collet回复其他人发的对话也会返回对应的url。**");
+        // sendMessage(chatId, "**Hello, World!**");
     }
 }
 
@@ -56,10 +58,12 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     std::ostringstream customUrlStream;
     customUrlStream << baseUrl << "/" << fileType << "/" << shortId;
     std::string customUrl = customUrlStream.str();
-    std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
+    // std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
+    std::string formattedMessage = emoji + " **" + fileName + " URL**:\n"
+    + "直链：" + customUrl + "\n"
+    + "点击复制链接文本：\n`" + customUrl + "`\n"
+    + "点击复制Markdown格式：\n`![](" + customUrl + ")`";
 
-    // 多线程环境下，独立创建数据库连接
-    // DBManager dbManager("bot_database.db");
 
     // 检查是否允许注册
     if (!dbManager.isUserRegistered(userId) && !dbManager.isRegistrationOpen() && !isOwner(userId)) {
@@ -521,7 +525,8 @@ bool Bot::isOwner(const std::string& userId) {
 }
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
-    std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId + "&text=" + buildTelegramUrl(message);
+    std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId +"&parse_mode=MarkdownV2&text=" + buildTelegramUrl(escapeTelegramUrl(message));
+    std::cout << "Request URL: " << sendMessageUrl << std::endl;
     sendHttpRequest(sendMessageUrl);
 }
 

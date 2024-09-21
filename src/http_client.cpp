@@ -3,6 +3,7 @@
 #include <iostream>
 #include "utils.h"
 #include <mutex>
+#include <iomanip>
 
 // 线程安全的CURL初始化和清理
 std::mutex curlMutex;  // 用于保证CURL全局初始化的线程安全
@@ -50,7 +51,10 @@ std::string sendHttpRequest(const std::string& url) {
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             log(LogLevel::LOGERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)) + " URL: " + url);
-        }
+        } 
+        // else {
+        //     log(LogLevel::INFO,"API Response: " + std::string(response) );
+        // }
         curl_easy_cleanup(curl);  // 清理当前线程的CURL句柄
     } else {
         log(LogLevel::LOGERROR, "Failed to initialize CURL.");
@@ -61,24 +65,36 @@ std::string sendHttpRequest(const std::string& url) {
 
 // 构建 Telegram 发送消息的 URL 并对文本参数进行编码
 std::string buildTelegramUrl(const std::string& text) {
-    CURL* curl = curl_easy_init();
-    std::string encoded_text;
+    std::ostringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
 
-    if (curl) {
-        // 对 text 参数进行 URL 编码
-        char* encoded = curl_easy_escape(curl, text.c_str(), text.length());
-        if (encoded) {
-            encoded_text = encoded;
-            curl_free(encoded);
+    for (char c : text) {
+        if (c == ' ') {
+            escaped << "%20";  // 空格
+        } else if (c == '\n') {
+            escaped << "%0A";  // 换行符
         } else {
-            log(LogLevel::LOGERROR, "Error encoding text: " + text);
+            escaped << c;  // 其他字符保持原样
         }
-        curl_easy_cleanup(curl);
-    } else {
-        log(LogLevel::LOGERROR, "Failed to initialize CURL for URL encoding.");
+    }
+    return escaped.str();
+}
+
+std::string escapeTelegramUrl(const std::string& text) {
+    std::ostringstream escapedText;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        // 转义 MarkdownV2 中的特殊字符：!、[、]、(、)、.
+        if (text[i] == '!' || text[i] == '[' || text[i] == ']' || text[i] == '(' || text[i] == ')' || text[i] == '.') {
+            escapedText << '\\';  // 在这些字符前添加反斜杠进行转义
+        }
+
+        // 保留其他字符，不转义 ** 和其他符号
+        escapedText << text[i];
     }
 
-    log(LogLevel::INFO, "Built Telegram URL: " + encoded_text);
-
-    return encoded_text;
+    return escapedText.str();
 }
+
+
