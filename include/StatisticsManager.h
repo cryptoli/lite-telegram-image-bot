@@ -29,6 +29,8 @@ public:
     // 插入请求统计
     void insertRequestStatistics(const std::string& clientIp, const std::string& requestPath, const std::string& httpMethod,
                                  int responseTime, int statusCode, int responseSize, int requestSize, const std::string& fileType, int requestLatency);
+    
+    void updateTopUrlsInTransaction(sqlite3* db, const std::chrono::time_point<std::chrono::system_clock>& periodStart, const std::string& url);
 
     // 更新服务使用数据
     void updateServiceUsage(const std::chrono::time_point<std::chrono::system_clock>& periodStart, int totalRequests, int successfulRequests,
@@ -68,7 +70,7 @@ private:
     DBManager& dbManager;
 
     // 执行 SQL 插入或更新
-    void executeSQL(const std::string& query, const std::vector<SQLParam>& params);
+    void executeSQL(sqlite3* db, const std::string& query, const std::vector<SQLParam>& params);
 
     // 执行统计查询，返回计数结果
     int executeCountQuery(const std::string& query, const std::vector<SQLParam>& params);

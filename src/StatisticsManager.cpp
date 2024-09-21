@@ -11,72 +11,76 @@ StatisticsManager::StatisticsManager(DBManager& dbManager) : dbManager(dbManager
 // 插入请求统计
 void StatisticsManager::insertRequestStatistics(const std::string& clientIp, const std::string& requestPath, const std::string& httpMethod,
                                                 int responseTime, int statusCode, int responseSize, int requestSize, const std::string& fileType, int requestLatency) {
+    // 从连接池中获取一个连接，保证线程独立的连接使用
+    sqlite3* db = dbManager.getDbConnection();
+
+    // 设置锁等待时间，避免频繁锁定
+    sqlite3_busy_timeout(db, 5000);
+
+    // 开启事务
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    // 插入 request_statistics 表
     std::string query = "INSERT INTO request_statistics (client_ip, request_path, http_method, request_time, response_time, status_code, response_size, request_size, file_type, request_latency) "
                         "VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)";
     std::vector<SQLParam> params = {
-        clientIp,
-        requestPath,
-        httpMethod,
-        responseTime,
-        statusCode,
-        responseSize,
-        requestSize,
-        fileType,
-        requestLatency
+        clientIp, requestPath, httpMethod, responseTime, statusCode, responseSize, requestSize, fileType, requestLatency
     };
-    executeSQL(query, params);
+    executeSQL(db, query, params);
 
-    // 更新URL统计信息
-    updateTopUrlsByPeriod(std::chrono::system_clock::now(), requestPath);
-    updateTopUrlsByHistory(requestPath);
+    // 更新 URL 统计信息，合并到一个事务中
+    updateTopUrlsInTransaction(db, std::chrono::system_clock::now(), requestPath);
+
+    // 提交事务
+    sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+
+    // 释放连接到连接池中
+    dbManager.releaseDbConnection(db);
+}
+
+void StatisticsManager::updateTopUrlsInTransaction(sqlite3* db, const std::chrono::time_point<std::chrono::system_clock>& periodStart, const std::string& url) {
+    std::string periodQuery = "INSERT INTO top_urls_period (period_start, url, request_count) "
+                              "VALUES (?, ?, 1) "
+                              "ON CONFLICT(period_start, url) DO UPDATE SET request_count = request_count + 1";
+    std::vector<SQLParam> periodParams = {
+        static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(periodStart.time_since_epoch()).count()), url
+    };
+    executeSQL(db, periodQuery, periodParams);
+
+    std::string historyQuery = "INSERT INTO top_urls_history (url, total_request_count) "
+                               "VALUES (?, 1) "
+                               "ON CONFLICT(url) DO UPDATE SET total_request_count = total_request_count + 1";
+    std::vector<SQLParam> historyParams = { url };
+    executeSQL(db, historyQuery, historyParams);
 }
 
 // 更新服务使用数据
 void StatisticsManager::updateServiceUsage(const std::chrono::time_point<std::chrono::system_clock>& periodStart, int totalRequests, int successfulRequests,
                                            int failedRequests, int totalRequestSize, int totalResponseSize, int uniqueIps, int maxConcurrentRequests,
                                            int maxResponseTime, int avgResponseTime) {
+    sqlite3* db = dbManager.getDbConnection();
+    
+    // 开启事务
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
     std::string query = "INSERT OR REPLACE INTO service_usage (period_start, total_requests, successful_requests, failed_requests, "
                         "total_request_size, total_response_size, unique_ips, max_concurrent_requests, max_response_time, avg_response_time) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     std::vector<SQLParam> params = {
         static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(periodStart.time_since_epoch()).count()),
-        totalRequests,
-        successfulRequests,
-        failedRequests,
-        totalRequestSize,
-        totalResponseSize,
-        uniqueIps,
-        maxConcurrentRequests,
-        maxResponseTime,
-        avgResponseTime
+        totalRequests, successfulRequests, failedRequests, totalRequestSize, totalResponseSize, uniqueIps, maxConcurrentRequests, maxResponseTime, avgResponseTime
     };
-    executeSQL(query, params);
-}
+    executeSQL(db, query, params);
 
-// 更新某个时间段内的 URL 访问次数
-void StatisticsManager::updateTopUrlsByPeriod(const std::chrono::time_point<std::chrono::system_clock>& periodStart, const std::string& url) {
-    std::string query = "INSERT INTO top_urls_period (period_start, url, request_count) "
-                        "VALUES (?, ?, 1) "
-                        "ON CONFLICT(period_start, url) DO UPDATE SET request_count = request_count + 1";
-    std::vector<SQLParam> params = {
-        static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(periodStart.time_since_epoch()).count()),
-        url
-    };
-    executeSQL(query, params);
-}
-
-// 更新历史 URL 访问次数
-void StatisticsManager::updateTopUrlsByHistory(const std::string& url) {
-    std::string query = "INSERT INTO top_urls_history (url, total_request_count) "
-                        "VALUES (?, 1) "
-                        "ON CONFLICT(url) DO UPDATE SET total_request_count = total_request_count + 1";
-    std::vector<SQLParam> params = { url };
-    executeSQL(query, params);
+    // 提交事务
+    sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+    
+    // 释放连接
+    dbManager.releaseDbConnection(db);
 }
 
 // 执行 SQL 插入或更新
-void StatisticsManager::executeSQL(const std::string& query, const std::vector<SQLParam>& params) {
-    sqlite3* db = dbManager.getDbConnection();
+void StatisticsManager::executeSQL(sqlite3* db, const std::string& query, const std::vector<SQLParam>& params) {
     sqlite3_stmt* stmt;
 
     // 准备 SQL 语句
@@ -87,7 +91,7 @@ void StatisticsManager::executeSQL(const std::string& query, const std::vector<S
             const SQLParam& param = params[i];
             switch (param.type) {
                 case SQLParam::Type::Text:
-                    sqlite3_bind_text(stmt, index, std::move(param.textValue.c_str()), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text(stmt, index, param.textValue.c_str(), -1, SQLITE_TRANSIENT);
                     break;
                 case SQLParam::Type::Int:
                     sqlite3_bind_int(stmt, index, param.intValue);
@@ -100,14 +104,12 @@ void StatisticsManager::executeSQL(const std::string& query, const std::vector<S
 
         // 执行 SQL 语句
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            log(LogLevel::LOGERROR, query + "Failed to execute SQL statement: " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, query + " Failed to execute SQL statement: " + std::string(sqlite3_errmsg(db)));
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, query + "Failed to prepare SQL statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, query + " Failed to prepare SQL statement: " + std::string(sqlite3_errmsg(db)));
     }
-
-    dbManager.releaseDbConnection(db);
 }
 
 // 获取总请求数
