@@ -60,7 +60,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     std::string customUrl = customUrlStream.str();
     // std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
     std::string formattedMessage = emoji + " **" + fileName + " URL**:\n"
-    + "直链：" + customUrl + "\n"
+    + "直链：```" + customUrl + "```\n"
     + "点击复制链接文本：\n`" + customUrl + "`\n"
     + "点击复制Markdown格式：\n`![](" + customUrl + ")`";
 
