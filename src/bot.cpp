@@ -526,7 +526,7 @@ bool Bot::isOwner(const std::string& userId) {
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
     std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId +"&parse_mode=MarkdownV2&text=" + buildTelegramUrl(escapeTelegramUrl(message));
-    std::cout << "Request URL: " << sendMessageUrl << std::endl;
+    // std::cout << "Request URL: " << sendMessageUrl << std::endl;
     sendHttpRequest(sendMessageUrl);
 }
 
