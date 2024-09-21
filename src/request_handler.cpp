@@ -44,23 +44,22 @@ std::string getFileExtension(const std::string& filePath) {
     if (pos != std::string::npos) {
         return filePath.substr(pos);
     }
-    return ""; // No extension found
+    return "";
 }
 
 // 处理流式传输的回调函数，支持分段传输
-size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Response* res) {
+size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     size_t totalSize = size * nmemb;
     if (totalSize > 0) {
-        res->body.append(static_cast<char*>(ptr), totalSize);
+        // 将 userp 转换为 httplib::Stream* 或其他你需要的类型
+        httplib::Stream* stream = static_cast<httplib::Stream*>(userdata);
 
-        if (res->body.size() > 102400) {
-            res->body.clear();
-        }
+        // 直接将数据写入响应流
+        stream->write(static_cast<char*>(ptr), totalSize);
     }
     return totalSize;
 }
 
-// 处理视频文件的流式传输，支持分段请求
 void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType) {
     CURL* curl = curl_easy_init();
     if (!curl) {
@@ -70,32 +69,22 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
-
-    // 启用 HTTP Keep-Alive
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
-
-    // 增加缓冲区大小，减少内存占用
     curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65536L);  // 使用 64KB 的缓冲区
-
-    // 设置请求超时
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 
-    // 设置回调函数，流式传输数据
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+    // 显式转换回调函数类型
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<size_t(*)(void*, size_t, size_t, void*)>(streamWriteCallback));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将 res 的指针作为 userdata
 
-    // 处理分段请求（Range 请求）
+    // 处理分段请求
     if (req.has_header("Range")) {
         std::string rangeHeader = req.get_header_value("Range");
         curl_easy_setopt(curl, CURLOPT_RANGE, rangeHeader.c_str());
     }
 
-    // 执行请求
     CURLcode res_code = curl_easy_perform(curl);
-    
     if (res_code != CURLE_OK) {
         log(LogLevel::LOGERROR, "CURL error: " + std::string(curl_easy_strerror(res_code)));
         res.status = 500;
