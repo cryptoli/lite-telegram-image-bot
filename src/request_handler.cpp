@@ -51,7 +51,6 @@ std::string getFileExtension(const std::string& filePath) {
 size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     size_t totalSize = size * nmemb;
     if (totalSize > 0) {
-        // 将 userp 转换为 httplib::Stream* 或其他你需要的类型
         httplib::Stream* stream = static_cast<httplib::Stream*>(userdata);
 
         // 直接将数据写入响应流
@@ -74,9 +73,9 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 
-    // 显式转换回调函数类型
+    // 使用流式回调处理数据，传递 res 的指针作为 userdata
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<size_t(*)(void*, size_t, size_t, void*)>(streamWriteCallback));
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将 res 的指针作为 userdata
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将 res 的指针传递给回调函数
 
     // 处理分段请求
     if (req.has_header("Range")) {
@@ -92,6 +91,8 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     }
 
     curl_easy_cleanup(curl);
+
+    std::string().swap(res.body);
 }
 
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config, DBManager& dbManager) {
