@@ -98,12 +98,12 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 
             if (res_code != CURLE_OK) {
                 sink.write(buffer.data(), buffer.size());  // 将当前缓冲区数据写入 sink
-                buffer.clear();  // 清空缓冲区
+                std::string().swap(buffer);  // 清空并强制释放 buffer 占用的内存
                 return false;  // 数据传输结束，停止
             }
 
             sink.write(buffer.data(), buffer.size());  // 将缓冲区的数据写入 sink
-            buffer.clear();  // 清空缓冲区
+            std::string().swap(buffer);  // 清空并强制释放 buffer 占用的内存
             return true;  // 继续传输
         },
         [curl](bool success) {
