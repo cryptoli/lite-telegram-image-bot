@@ -1,7 +1,7 @@
 CXX = g++
 
 # 开启优化选项 -O2 和并行编译的预处理指令
-CXXFLAGS = -std=c++17 -Wall -O2 -g -I$(INCDIR)
+CXXFLAGS = -std=c++17 -Wall -O3 -g -I$(INCDIR)
 
 ifeq ($(OS),Windows_NT)
     CXXFLAGS += -pthread -I/mingw64/include

@@ -48,53 +48,46 @@ std::string getFileExtension(const std::string& filePath) {
 }
 
 // 处理流式传输的回调函数，支持分段传输
-size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
+size_t streamWriteCallback(void* ptr, size_t size, size_t nmemb, httplib::Response* res) {
     size_t totalSize = size * nmemb;
-    if (totalSize > 0) {
-        httplib::Stream* stream = static_cast<httplib::Stream*>(userdata);
-
-        // 直接将数据写入响应流
-        stream->write(static_cast<char*>(ptr), totalSize);
-    }
+    res->body.append(static_cast<char*>(ptr), totalSize);
     return totalSize;
 }
 
 void handleStreamRequest(const httplib::Request& req, httplib::Response& res, const std::string& fileDownloadUrl, const std::string& mimeType) {
     CURL* curl = curl_easy_init();
-    if (!curl) {
-        res.status = 500;
-        res.set_content("Failed to initialize CURL", "text/plain");
-        return;
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
+
+        // 启用 HTTP Keep-Alive
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
+
+        // 增加缓冲区大小
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 102400L);
+
+        // 设置请求超时
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+
+        // 设置分块传输
+        // res.set_header("Transfer-Encoding", "chunked");
+
+        // 设置回调函数，流式传输数据
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, streamWriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+
+        // 执行请求
+        curl_easy_perform(curl);
+
+        // 清理 curl 资源
+        curl_easy_cleanup(curl);
     }
-
-    curl_easy_setopt(curl, CURLOPT_URL, fileDownloadUrl.c_str());
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65536L);  // 使用 64KB 的缓冲区
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-
-    // 使用流式回调处理数据，传递 res 的指针作为 userdata
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<size_t(*)(void*, size_t, size_t, void*)>(streamWriteCallback));
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);  // 将 res 的指针传递给回调函数
-
-    // 处理分段请求
-    if (req.has_header("Range")) {
-        std::string rangeHeader = req.get_header_value("Range");
-        curl_easy_setopt(curl, CURLOPT_RANGE, rangeHeader.c_str());
-    }
-
-    CURLcode res_code = curl_easy_perform(curl);
-    if (res_code != CURLE_OK) {
-        log(LogLevel::LOGERROR, "CURL error: " + std::string(curl_easy_strerror(res_code)));
-        res.status = 500;
-        res.set_content("Failed to stream file", "text/plain");
-    }
-
-    curl_easy_cleanup(curl);
-
-    std::string().swap(res.body);
+    
+    res.set_header("Content-Type", mimeType);
+    res.set_header("Accept-Ranges", "bytes");  // 支持分段下载
 }
-
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config, DBManager& dbManager) {
     log(LogLevel::INFO, "Received request for image.");
     if (req.matches.size() < 2) {
@@ -169,6 +162,17 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         }
     }
 
+    // 获取文件 MIME 类型
+    std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
+
+    // 如果文件是视频或文档，直接流式传输而不缓存
+    if (mimeType.find("video") != std::string::npos || mimeType.find("application") != std::string::npos) {
+        log(LogLevel::INFO, "Streaming file directly from Telegram (no caching) for MIME type: " + mimeType);
+        std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
+        handleStreamRequest(req, res, telegramFileDownloadUrl, mimeType);
+        return;
+    }
+
     // 从 Telegram 下载文件
     std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
     std::string fileData = sendHttpRequest(telegramFileDownloadUrl);
@@ -185,7 +189,6 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     });
 
     // 返回文件
-    std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
     setHttpResponse(res, fileData, mimeType, req);
     log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
 }
