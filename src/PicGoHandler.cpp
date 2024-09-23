@@ -16,7 +16,6 @@ PicGoHandler::PicGoHandler(const Config& config)
 void PicGoHandler::handleUpload(const httplib::Request& req, httplib::Response& res,
                                 const std::string& userId, const std::string& userName,
                                 DBManager& dbManager) {
-    // 验证请求方法
     if (req.method != "POST") {
         res.status = 405;
         res.set_content(R"({"error":"Method Not Allowed"})", "application/json");
@@ -37,39 +36,12 @@ void PicGoHandler::handleUpload(const httplib::Request& req, httplib::Response& 
         return;
     }
 
-    // 生成唯一的文件名，避免冲突
-    std::string uniqueFilename = generateUniqueFilename(filename);
-    std::string tempFilePath = "cache/" + uniqueFilename;
-
-    // 确保目录存在
-    if (!createDirectoryIfNotExists("cache")) {
-        res.status = 500;
-        res.set_content(R"({"error":"Internal Server Error: Failed to create directory"})", "application/json");
-        return;
-    }
-
-    // 将文件内容写入临时文件（可选）
-    std::ofstream ofs(tempFilePath, std::ios::binary);
-    if (!ofs.is_open()) {
-        log(LogLevel::LOGERROR, "Failed to open file for writing: " + tempFilePath);
-        res.status = 500;
-        res.set_content(R"({"error":"Internal Server Error: Failed to save file"})", "application/json");
-        return;
-    }
-    ofs << file.content;
-    ofs.close();
-
     // 上传到 Telegram
     std::string telegramFileId;
     if (!uploadToTelegram(file.content, filename, MediaType::Photo, telegramFileId)) {
         res.status = 500;
         res.set_content(R"({"error":"Internal Server Error: Failed to upload to Telegram"})", "application/json");
         return;
-    }
-
-    // 删除临时文件
-    if (std::remove(tempFilePath.c_str()) != 0) {
-        log(LogLevel::LOGERROR, "Failed to delete temporary file: " + tempFilePath);
     }
 
     std::string shortId = generateShortLink(telegramFileId);

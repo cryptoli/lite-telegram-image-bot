@@ -176,7 +176,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             // 获取客户端 IP 地址
             std::string clientIp = req.remote_addr;
             std::string referer = req.get_header_value("Referer");
-            log(LogLevel::INFO, "Request referer:  " + referer);
+            log(LogLevel::INFO, "Request referer:  " + referer +", clientIP: " + clientIp);
 
             // 进行限流检查
             int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
