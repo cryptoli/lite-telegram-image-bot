@@ -175,6 +175,8 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
 
             // 获取客户端 IP 地址
             std::string clientIp = req.remote_addr;
+            std::string referer = req.get_header_value("Referer");
+            log(LogLevel::INFO, "Request referer:  " + referer);
 
             // 进行限流检查
             int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
@@ -185,7 +187,6 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             }
 
             if (config.enableReferers()) {
-                std::string referer = req.get_header_value("Referer");
                 if (referer.empty()) {
                     res.status = 403;
                     res.set_content("Forbidden", "text/plain");

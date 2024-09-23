@@ -5,7 +5,7 @@ CXXFLAGS = -std=c++17 -Wall -O3 -g -I$(INCDIR)
 
 ifeq ($(OS),Windows_NT)
     CXXFLAGS += -pthread -I/mingw64/include
-    LDFLAGS = -L/mingw64/lib -pthread -lcurl -lssl -lcrypto -lws2_32 -lsqlite3 -lz
+    LDFLAGS = -L/mingw64/lib -pthread -lcurl -lssl -lcrypto -lws2_32 -lsqlite3 -lz -lcrypt32
     RM = cmd /C del /Q
 else
     CXXFLAGS += -pthread
