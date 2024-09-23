@@ -3,6 +3,8 @@
 Lite Telegram Image Bot 是一个基于 C++ 的 Telegram 机器人项目，可以处理用户发送给机器人的图片，并返回一个可公开访问的 URL。
 # 演示BOT
 https://t.me/liteTgImagebot
+# 开发频道
+https://t.me/cryptothrifts
 
 ## 功能特性
 
@@ -102,6 +104,7 @@ telegram_api_url默认为官方api，如果需要自定义可以修改
     "secret_token": "random_secret_token",
     "owner_id": "your_telegram_id",
     "telegram_api_url": "https://api.telegram.org",
+    "channel_id": "your_channel_id",
     "mime_types": {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -208,6 +211,10 @@ ban - 封禁用户（仅限拥有者）
 openregister - 开启获取文件URL功能（仅限拥有者）
 closeregister - 关闭获取文件URL功能（仅限拥有者）
 ```
+### 10. 如何配置picgo
+web接口上传的文件将会保存到自建的频道中，频道id可在配置文件中配置;频道id获取方式：@username_to_id_bot，发送频道的 @用户名，它会返回对应的频道 ID；
+picgo自定义链接配置如下图，自定义请求头验证接口权限{"X-Telegram-Bot-Api-Secret-Token":"your_secret_key"}
+![](https://image.cryptothrift.cc/d/curh0F)
 ## 贡献
 
 欢迎提交 issue 或 pull request 来帮助改进此项目。如果你有新的想法或发现了 bug，欢迎与我们分享。

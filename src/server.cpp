@@ -174,7 +174,15 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             auto requestArrivalTime = std::chrono::steady_clock::now();
 
             // 获取客户端 IP 地址
-            std::string clientIp = req.remote_addr;
+            // std::string clientIp = req.remote_addr;
+            std::string clientIp;
+            if (req.has_header("X-Forwarded-For")) {
+                clientIp = req.get_header_value("X-Forwarded-For");
+            } else if (req.has_header("X-Real-IP")) {
+                clientIp = req.get_header_value("X-Real-IP");
+            } else {
+                clientIp = req.remote_addr;
+            }
             std::string referer = req.get_header_value("Referer");
             log(LogLevel::INFO, "Request referer:  " + referer +", clientIP: " + clientIp);
 
