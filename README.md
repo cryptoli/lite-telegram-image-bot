@@ -1,6 +1,8 @@
 # Telegram Image Bot
 
 Lite Telegram Image Bot 是一个基于 C++ 的 Telegram 机器人项目，可以处理用户发送给机器人的图片，并返回一个可公开访问的 URL。
+# 演示BOT
+https://t.me/liteTgImagebot
 
 ## 功能特性
 

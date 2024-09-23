@@ -6,6 +6,7 @@
 #include <fstream>
 #include "db_manager.h"
 #include <iostream>
+#include "httplib.h"
 
 static const std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
     {"photo", "images", "🖼️", "图片"},
@@ -21,7 +22,7 @@ Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbMa
 
 // 处理文件并发送文件链接（适用于不同文件类型）
 void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId, const std::string& baseUrl, const nlohmann::json& message, const std::string& username) {
-    bool fileProcessed = false;  // 用于检查是否处理了至少一个文件
+    bool fileProcessed = false;
 
     for (const auto& fileType : fileTypes) {
         const std::string& type = std::get<0>(fileType);
@@ -47,18 +48,15 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
     // 如果没有处理任何文件，提示用户
     if (!fileProcessed) {
         sendMessage(chatId, "**请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url；将我拉入群聊使用/collet回复其他人发的对话也会返回对应的url。**");
-        // sendMessage(chatId, "**Hello, World!**");
     }
 }
 
 // 创建并发送文件链接
 void Bot::createAndSendFileLink(const std::string& chatId, const std::string& userId, const std::string& fileId, const std::string& baseUrl, const std::string& fileType, const std::string& emoji, const std::string& fileName, const std::string& username) {
     std::string shortId = generateShortLink(fileId);
-    // std::string customUrl = baseUrl + "/" + fileType + "/" + shortId;
     std::ostringstream customUrlStream;
     customUrlStream << baseUrl << "/" << fileType << "/" << shortId;
     std::string customUrl = customUrlStream.str();
-    // std::string formattedMessage = emoji + " **" + fileName + " URL**:\n" + customUrl;
     std::string formattedMessage = emoji + " **" + fileName + " URL**:\n"
     + "直链：" + customUrl + "\n"
     + "点击复制链接文本：\n`" + customUrl + "`\n"
@@ -80,6 +78,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
     if (dbManager.addUserIfNotExists(userId, username)) {
         dbManager.addFile(userId, fileId, customUrl, fileName, shortId, customUrl, "");
         sendMessage(chatId, formattedMessage);
+
         log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
     } else {
         sendMessage(chatId, "无法收集文件，用户添加失败");
@@ -88,9 +87,6 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
 // 修改的 /my 命令，支持分页并通过按钮切换上下页
 void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
-    // 初始化DBManager
-    // DBManager dbManager("bot_database.db");
-
     // 获取用户文件总数并计算总页数
     int totalFiles = dbManager.getUserFileCount(userId);
     int totalPages = (totalFiles + pageSize - 1) / pageSize;  // 计算总页数
@@ -202,8 +198,6 @@ void Bot::listRemovableFiles(const std::string& chatId, const std::string& userI
 }
 
 void Bot::listUsersForBan(const std::string& chatId, int page, int pageSize, const std::string& messageId) {
-    // DBManager dbManager("bot_database.db");
-
     int totalUsers = dbManager.getTotalUserCount();
     int totalPages = (totalUsers + pageSize - 1) / pageSize;
 
@@ -320,9 +314,9 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatId = std::to_string(message["chat"]["id"].get<int64_t>());
             std::string userId = std::to_string(message["from"]["id"].get<int64_t>());
             std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
-            // Config config("config.json");
 
             std::string baseUrl = config.getWebhookUrl();
+            // forwardMessageToChannel(message);
 
             // 处理命令
             if (message.contains("text")) {
@@ -330,7 +324,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
                 std::string command = text.substr(0, text.find('@'));
 
                 // 群组或超级群组中仅处理命令
-                if ((chatType == "group" || chatType == "supergroup") && text[0] != '/') {
+                if ((chatType == "group" || chatType == "supergroup" || chatType == "channel") && text[0] != '/') {
                     return;
                 }
                 if (command == "/collect" && message.contains("reply_to_message")) {
@@ -384,6 +378,40 @@ void Bot::processUpdate(const nlohmann::json& update) {
         }
     } catch (std::exception& e) {
         log(LogLevel::LOGERROR, "Error processing update: " + std::string(e.what()));
+    }
+}
+
+void Bot::forwardMessageToChannel(const nlohmann::json& message) {
+    std::string fromChatId = std::to_string(message["chat"]["id"].get<int64_t>());
+    int64_t messageId = message["message_id"].get<int64_t>();
+
+    std::string channelId = config.getTelegramChannelId();
+
+    nlohmann::json requestBody = {
+        {"chat_id", channelId},
+        {"from_chat_id", fromChatId},
+        {"message_id", messageId}
+    };
+
+    std::string apiUrl = config.getTelegramApiUrl() + "/bot" + config.getApiToken() + "/forwardMessage";
+
+    httplib::Client cli(config.getTelegramApiUrl());
+    cli.set_read_timeout(60, 0);
+
+    auto res = cli.Post(("/bot" + config.getApiToken() + "/forwardMessage").c_str(),
+                        requestBody.dump(),
+                        "application/json");
+
+    if (res && res->status == 200) {
+        log(LogLevel::INFO, "Message forwarded to channel successfully.");
+    } else {
+        log(LogLevel::LOGERROR, "Failed to forward message to channel.");
+        if (res) {
+            log(LogLevel::LOGERROR, "Status code: " + std::to_string(res->status));
+            log(LogLevel::LOGERROR, "Response: " + res->body);
+        } else {
+            log(LogLevel::LOGERROR, "No response from Telegram API.");
+        }
     }
 }
 
