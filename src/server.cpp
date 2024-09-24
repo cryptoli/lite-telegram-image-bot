@@ -140,7 +140,6 @@ std::string loadTemplate(const std::string& filepath) {
 }
 
 void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPool& pool, Bot& bot, CacheManager& rateLimiter, DBManager& dbManager) {
-    // 初始化统计管理器
     StatisticsManager statisticsManager(dbManager);
 
     std::string apiToken = config.getApiToken();
@@ -280,7 +279,6 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         }
     });
 
-    // 图片页面
     svr->Get("/pic", [&dbManager](const httplib::Request& req, httplib::Response& res) {
         int page = req.has_param("page") ? std::stoi(req.get_param_value("page")) : 1;
         int pageSize = 10;

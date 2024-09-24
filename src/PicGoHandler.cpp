@@ -123,8 +123,6 @@ bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::s
         // 构建请求路径
         std::string apiPath = "/bot" + config.getApiToken() + "/" + apiMethod;
 
-        log(LogLevel::INFO, "Sending POST request to " + apiPath);
-
         // 发送 POST 请求
         auto res = cli.Post(apiPath.c_str(), items);
 

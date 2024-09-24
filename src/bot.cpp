@@ -1,3 +1,4 @@
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "bot.h"
 #include "db_manager.h"
 #include "config.h"
@@ -316,7 +317,7 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
 
             std::string baseUrl = config.getWebhookUrl();
-            // forwardMessageToChannel(message);
+            forwardMessageToChannel(message);
 
             // 处理命令
             if (message.contains("text")) {
@@ -382,42 +383,43 @@ void Bot::processUpdate(const nlohmann::json& update) {
 }
 
 void Bot::forwardMessageToChannel(const nlohmann::json& message) {
-    std::string fromChatId = std::to_string(message["chat"]["id"].get<int64_t>());
-    int64_t messageId = message["message_id"].get<int64_t>();
+    try {
+        std::string fromChatId = std::to_string(message["chat"]["id"].get<int64_t>());
+        int64_t messageId = message["message_id"].get<int64_t>();
 
-    std::string channelId = config.getTelegramChannelId();
+        std::string channelId = config.getTelegramChannelId();
 
-    nlohmann::json requestBody = {
-        {"chat_id", channelId},
-        {"from_chat_id", fromChatId},
-        {"message_id", messageId}
-    };
+        nlohmann::json requestBody = {
+            {"chat_id", channelId},
+            {"from_chat_id", fromChatId},
+            {"message_id", messageId},
+            {"disable_notification", true}
+        };
 
-    std::string apiUrl = config.getTelegramApiUrl() + "/bot" + config.getApiToken() + "/forwardMessage";
-
-    httplib::Client cli(config.getTelegramApiUrl());
-    cli.set_read_timeout(60, 0);
-
-    auto res = cli.Post(("/bot" + config.getApiToken() + "/forwardMessage").c_str(),
-                        requestBody.dump(),
-                        "application/json");
-
-    if (res && res->status == 200) {
-        log(LogLevel::INFO, "Message forwarded to channel successfully.");
-    } else {
-        log(LogLevel::LOGERROR, "Failed to forward message to channel.");
-        if (res) {
-            log(LogLevel::LOGERROR, "Status code: " + std::to_string(res->status));
-            log(LogLevel::LOGERROR, "Response: " + res->body);
+        httplib::Client cli(config.getTelegramApiUrl());
+        cli.set_read_timeout(10, 0);
+    
+        auto res = cli.Post(("/bot" + config.getApiToken() + "/forwardMessage").c_str(), requestBody.dump(), "application/json");
+        if (res && res->status == 200) {
+            log(LogLevel::INFO, "Message forwarded to channel successfully.");
         } else {
-            log(LogLevel::LOGERROR, "No response from Telegram API.");
+            log(LogLevel::LOGERROR, "Failed to forward message to channel.");
+            if (res) {
+                log(LogLevel::LOGERROR, "Status code: " + std::to_string(res->status));
+                log(LogLevel::LOGERROR, "Response: " + res->body);
+            } else {
+                log(LogLevel::LOGERROR, "No response from Telegram API.");
+            }
         }
+    } catch (std::exception& e) {
+        log(LogLevel::LOGERROR, "Error processing update: " + std::string(e.what()));
+    } catch (...) {
+        log(LogLevel::LOGERROR, "Error processing 1241243 ");
     }
 }
 
 // collect命令：收集并保存文件
 void Bot::collectFile(const std::string& chatId, const std::string& userId, const std::string& username, const nlohmann::json& replyMessage) {
-    // Config config("config.json");
     std::string baseUrl = config.getWebhookUrl();
     handleFileAndSend(chatId, userId, baseUrl, replyMessage, username);
 }
@@ -432,8 +434,6 @@ void Bot::removeFile(const std::string& chatId, const std::string& userId, const
         {"animation", "file_id"},
         {"sticker", "file_id"}
     };
-
-    // DBManager dbManager("bot_database.db");
 
     for (const auto& fileType : fileTypes) {
         const std::string& type = fileType.first;

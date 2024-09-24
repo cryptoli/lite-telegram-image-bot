@@ -87,7 +87,7 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
     
     res.set_header("Content-Type", mimeType);
     res.set_header("Accept-Ranges", "bytes");  // 支持分段下载
-}
+    }
 void handleImageRequest(const httplib::Request& req, httplib::Response& res, const std::string& apiToken, const std::map<std::string, std::string>& mimeTypes, ImageCacheManager& cacheManager, CacheManager& memoryCache, const std::string& telegramApiUrl, const Config& config, DBManager& dbManager) {
     if (req.matches.size() < 2) {
         res.status = 400;
