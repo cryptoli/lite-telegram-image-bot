@@ -8,6 +8,9 @@
 #include "db_manager.h"
 #include "config.h"
 #include "CacheManager.h"
+#include "thread_pool.h"
+#include "CacheManager.h"
+#include "StatisticsManager.h"
 
 // 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType);
@@ -26,5 +29,15 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
 std::string getBaseUrl(const std::string& url);
 void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req);
+void unifiedInterceptor(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& rateLimiter,
+                       std::function<void(const httplib::Request&, httplib::Response&)> handler,
+                       StatisticsManager& statisticsManager, ThreadPool& pool);
+std::string getClientIp(const httplib::Request& req);
+void handleMediaRequestWithTiming(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager,
+                                  const std::function<void(const httplib::Request&, httplib::Response&)>& handler,
+                                  StatisticsManager& statisticsManager, ThreadPool& pool, int requestLatency);
+std::string determineFileType(const std::string& requestPath);
+void handleRequestStatistics(const httplib::Request& req, httplib::Response& res, const std::string& requestPath,
+                             StatisticsManager& statisticsManager, ThreadPool& pool, int responseTime, int requestLatency);
 
 #endif

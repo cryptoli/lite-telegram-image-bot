@@ -307,22 +307,20 @@ void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
 
             std::string baseUrl = config.getWebhookUrl();
             
-
             // 处理命令
             if (message.contains("text")) {
                 std::string text = message["text"];
                 std::string command = text.substr(0, text.find('@'));
 
-                // 群组或超级群组中仅处理命令
                 if ((chatType == "group" || chatType == "supergroup" || chatType == "channel") && text[0] != '/') {
                     return;
                 }
                 if (command == "/collect" && message.contains("reply_to_message")) {
-                    const auto& replyMessage = message["reply_to_message"];
-                    collectFile(chatId, userId, message["from"].value("username", "unknown"), replyMessage);
                     pool.enqueue([=, &message]() {
                         forwardMessageToChannel(message);
                     });
+                    const auto& replyMessage = message["reply_to_message"];
+                    collectFile(chatId, userId, message["from"].value("username", "unknown"), replyMessage);
                     return;
                 }
                 if (command == "/remove") {
@@ -366,10 +364,10 @@ void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
                 }
             }
             if (chatType == "private") {
-                handleFileAndSend(chatId, userId, baseUrl, message, message["from"].value("username", "unknown"));
                 pool.enqueue([=, &message]() {
                     forwardMessageToChannel(message);
                 });
+                handleFileAndSend(chatId, userId, baseUrl, message, message["from"].value("username", "unknown"));
             }
         }
     } catch (std::exception& e) {
@@ -407,9 +405,9 @@ void Bot::forwardMessageToChannel(const nlohmann::json& message) {
             }
         }
     } catch (std::exception& e) {
-        log(LogLevel::LOGERROR, "Error processing update: " + std::string(e.what()));
+        log(LogLevel::LOGERROR, "Error processing forwardMessageToChannel: " + std::string(e.what()));
     } catch (...) {
-        log(LogLevel::LOGERROR, "Error processing 1241243 ");
+        log(LogLevel::LOGERROR, "Error processing forwardMessageToChannel");
     }
 }
 

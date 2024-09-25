@@ -6,7 +6,6 @@
 #include "bot.h"
 #include "db_manager.h"
 #include "CacheManager.h"
-#include "StatisticsManager.h"
 #include "http_client.h"
 #include "PicGoHandler.h"
 #include "Constant.h"
@@ -21,101 +20,6 @@
 #include <future>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
-
-// 获取客户端真实 IP 地址
-std::string getClientIp(const httplib::Request& req) {
-    if (req.has_header("X-Forwarded-For")) {
-        std::string forwardedFor = req.get_header_value("X-Forwarded-For");
-        size_t commaPos = forwardedFor.find(',');
-        if (commaPos != std::string::npos) {
-            return forwardedFor.substr(0, commaPos);
-        }
-        return forwardedFor;
-    }
-    if (req.has_header("X-Real-IP")) {
-        return req.get_header_value("X-Real-IP");
-    }
-    return req.remote_addr;
-}
-
-void handleMediaRequestWithTiming(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager,
-                                  const std::function<void(const httplib::Request&, httplib::Response&)>& handler,
-                                  StatisticsManager& statisticsManager, ThreadPool& pool, int requestLatency) {
-    // 记录开始处理请求的时间
-    auto startProcessingTime = std::chrono::steady_clock::now();
-
-    // 调用实际处理函数
-    handler(req, res);
-
-    // 记录完成处理请求的时间
-    auto endProcessingTime = std::chrono::steady_clock::now();
-
-    // 计算响应时间
-    int responseTime = std::chrono::duration_cast<std::chrono::milliseconds>(endProcessingTime - startProcessingTime).count();
-
-    // 调用统计函数
-    handleRequestStatistics(req, res, req.path, statisticsManager, pool, responseTime, requestLatency);
-}
-
-// 处理请求统计信息
-void handleRequestStatistics(const httplib::Request& req, httplib::Response& res, const std::string& requestPath,
-                             StatisticsManager& statisticsManager, ThreadPool& pool, int responseTime, int requestLatency) {
-    // 获取客户端 IP 地址
-    std::string clientIp = getClientIp(req);
-
-    // 计算响应大小和请求大小
-    int responseSize = static_cast<int>(res.body.size());  // 响应的字节大小
-    int requestSize = static_cast<int>(req.body.size());   // 请求的字节大小
-
-    // 获取状态码
-    int statusCode = res.status;  // HTTP 响应状态码
-
-    // 获取请求方法
-    std::string httpMethod = req.method;
-
-    // 获取文件类型（根据请求路径确定）
-    std::string fileType = determineFileType(requestPath);
-
-    // 异步统计处理
-    pool.enqueue([=, &statisticsManager]() {
-        // 插入请求统计数据
-        statisticsManager.insertRequestStatistics(clientIp, requestPath, httpMethod, responseTime, statusCode,
-                                                  responseSize, requestSize, fileType, requestLatency);
-
-        // 更新服务使用统计数据
-        auto periodStart = std::chrono::system_clock::now();
-        int totalRequests = 1;  // 当前请求计数为 1
-        int successfulRequests = (statusCode >= 200 && statusCode < 300) ? 1 : 0;
-        int failedRequests = (statusCode >= 400) ? 1 : 0;
-        int totalRequestSize = requestSize;
-        int totalResponseSize = responseSize;
-        int uniqueIps = 1;  // 当前请求的 IP 数为 1
-        int maxConcurrentRequests = 1;
-        int maxResponseTime = responseTime;
-        int avgResponseTime = responseTime;
-
-        statisticsManager.updateServiceUsage(periodStart, totalRequests, successfulRequests, failedRequests,
-                                             totalRequestSize, totalResponseSize, uniqueIps,
-                                             maxConcurrentRequests, maxResponseTime, avgResponseTime);
-    });
-}
-
-// 确定文件类型
-std::string determineFileType(const std::string& requestPath) {
-
-    auto pos = requestPath.rfind('.');
-    if (pos != std::string::npos) {
-        std::string extension = requestPath.substr(pos + 1);
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-        
-        auto it = extensionMap.find(extension);
-        if (it != extensionMap.end()) {
-            return it->second;
-        }
-    }
-    
-    return "unknown";
-}
 
 // 加载模板文件
 std::string loadTemplate(const std::string& filepath) {
@@ -153,46 +57,9 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config, dbManager);
     };
 
-    // 限流、Referer 验证和统计处理
     auto registerMediaRoute = [&](const std::string& pattern) {
         svr->Get(pattern, [&config, &rateLimiter, mediaRequestHandler, &statisticsManager, &pool](const httplib::Request& req, httplib::Response& res) {
-            // 记录请求到达时间
-            auto requestArrivalTime = std::chrono::steady_clock::now();
-
-            // 获取客户端 IP 地址
-            std::string clientIp = getClientIp(req);
-            std::string referer = req.get_header_value("Referer");
-            log(LogLevel::INFO, "Request referer:  " + referer +", clientIP: " + clientIp);
-
-            // 限流检查
-            int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
-            if (!rateLimiter.checkRateLimit(clientIp, maxRequestsPerMinute)) {
-                res.status = 429;
-                res.set_content("Too Many Requests", "text/plain");
-                return;
-            }
-
-            if (config.enableReferers()) {
-                if (referer.empty()) {
-                    res.status = 403;
-                    res.set_content("Forbidden", "text/plain");
-                    return;
-                }
-
-                std::vector<std::string> allowedReferers = config.getAllowedReferers();
-                std::unordered_set<std::string> allowedReferersSet(allowedReferers.begin(), allowedReferers.end());
-
-                if (!rateLimiter.checkReferer(referer, allowedReferersSet)) {
-                    res.status = 403;
-                    res.set_content("Forbidden", "text/plain");
-                    return;
-                }
-            }
-            auto startProcessingTime = std::chrono::steady_clock::now();
-
-            // 计算请求延迟
-            int requestLatency = std::chrono::duration_cast<std::chrono::milliseconds>(startProcessingTime - requestArrivalTime).count();
-            handleMediaRequestWithTiming(req, res, config, rateLimiter, mediaRequestHandler, statisticsManager, pool, requestLatency);
+            unifiedInterceptor(req, res, config, rateLimiter, mediaRequestHandler, statisticsManager, pool); 
         });
     };
 
