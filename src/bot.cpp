@@ -8,14 +8,7 @@
 #include "db_manager.h"
 #include <iostream>
 #include "httplib.h"
-
-static const std::vector<std::tuple<std::string, std::string, std::string, std::string>> fileTypes = {
-    {"photo", "images", "🖼️", "图片"},
-    {"document", "files", "📄", "文件"},
-    {"video", "videos", "🎥", "视频"},
-    {"audio", "audios", "🎵", "音频"},
-    {"sticker", "stickers", "📝", "贴纸"}
-};
+#include "Constant.h"
 
 Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbManager(dbManager), config("config.json") {
     initializeOwnerId();  // 初始化时获取Bot的所属者ID
@@ -27,28 +20,27 @@ void Bot::handleFileAndSend(const std::string& chatId, const std::string& userId
 
     for (const auto& fileType : fileTypes) {
         const std::string& type = std::get<0>(fileType);
-        const std::string& folder = "d";
         const std::string& emoji = std::get<2>(fileType);
         const std::string& description = std::get<3>(fileType);
 
-        if (type == "photo" && message.contains("photo")) {
-            const auto& photos = message["photo"];
+        if (type == PHOTO && message.contains(PHOTO)) {
+            const auto& photos = message[PHOTO];
             if (photos.is_array()) {
                 // 获取每张图片的最高分辨率
-                std::string fileId = photos.back()["file_id"];
-                createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description, username);
+                std::string fileId = photos.back()[FILE_ID];
+                createAndSendFileLink(chatId, userId, fileId, baseUrl, ROUTE_PATH, emoji, description, username);
                 fileProcessed = true;  // 标记为已处理文件
             }
         } else if (message.contains(type)) {
-            std::string fileId = message[type]["file_id"];
-            createAndSendFileLink(chatId, userId, fileId, baseUrl, folder, emoji, description, username);
+            std::string fileId = message[type][FILE_ID];
+            createAndSendFileLink(chatId, userId, fileId, baseUrl, ROUTE_PATH, emoji, description, username);
             fileProcessed = true;  // 标记为已处理文件
         }
     }
 
     // 如果没有处理任何文件，提示用户
     if (!fileProcessed) {
-        sendMessage(chatId, "**请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url；将我拉入群聊使用/collet回复其他人发的对话也会返回对应的url。**");
+        sendMessage(chatId, NORMAL_MESSAGE);
     }
 }
 
@@ -66,12 +58,12 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
     // 检查是否允许注册
     if (!dbManager.isUserRegistered(userId) && !dbManager.isRegistrationOpen() && !isOwner(userId)) {
-        sendMessage(chatId, "注册已关闭，无法收集文件");
+        sendMessage(chatId, CLOSE_REGISTER_MESSAGE);
         return;
     }
     // 检查是否被封禁
     if(!isOwner(userId) && dbManager.isUserBanned(userId)) {
-        sendMessage(chatId, "您已被封禁，无法收集文件");
+        sendMessage(chatId, BANNED_MESSAGE);
         return;
     }
 
@@ -82,7 +74,7 @@ void Bot::createAndSendFileLink(const std::string& chatId, const std::string& us
 
         log(LogLevel::INFO, "Created and sent " + fileType + " URL: " + customUrl + " for chat ID: " + chatId + ", for username: " + username);
     } else {
-        sendMessage(chatId, "无法收集文件，用户添加失败");
+        sendMessage(chatId, COLLECT_ERROR_MESSAGE);
     }
 }
 
@@ -93,7 +85,7 @@ void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int 
     int totalPages = (totalFiles + pageSize - 1) / pageSize;  // 计算总页数
 
     if (page > totalPages || page < 1) {
-        sendMessage(chatId, "暂无数据");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
         return;
     }
 
@@ -101,7 +93,7 @@ void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int 
     std::vector<std::tuple<std::string, std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
     
     if (files.empty()) {
-        sendMessage(chatId, "你还没有收集任何文件。");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
     } else {
         std::string response = "你收集的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
         for (const auto& file : files) {
@@ -118,7 +110,6 @@ void Bot::listMyFiles(const std::string& chatId, const std::string& userId, int 
         }
     }
 }
-
 
 // 创建分页键盘
 std::string Bot::createPaginationKeyboard(int currentPage, int totalPages) {
@@ -152,20 +143,18 @@ std::string Bot::createPaginationKeyboard(int currentPage, int totalPages) {
 }
 
 void Bot::listRemovableFiles(const std::string& chatId, const std::string& userId, int page, int pageSize, const std::string& messageId) {
-    // DBManager dbManager("bot_database.db");
-
     int totalFiles = dbManager.getUserFileCount(userId);
     int totalPages = (totalFiles + pageSize - 1) / pageSize;
 
     if (page > totalPages || page < 1) {
-        sendMessage(chatId, "暂无数据");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
         return;
     }
 
     std::vector<std::tuple<std::string, std::string, std::string>> files = dbManager.getUserFiles(userId, page, pageSize);
     
     if (files.empty()) {
-        sendMessage(chatId, "你没有可以删除的文件。");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
     } else {
         std::string response = "请选择你要删除的文件 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
         nlohmann::json inlineKeyboard = nlohmann::json::array();
@@ -203,14 +192,14 @@ void Bot::listUsersForBan(const std::string& chatId, int page, int pageSize, con
     int totalPages = (totalUsers + pageSize - 1) / pageSize;
 
     if (page > totalPages || page < 1) {
-        sendMessage(chatId, "没有更多用户。");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
         return;
     }
 
     std::vector<std::tuple<std::string, std::string, bool>> users = dbManager.getUsersForBan(page, pageSize);
     
     if (users.empty()) {
-        sendMessage(chatId, "没有可封禁的用户。");
+        sendMessage(chatId, NO_MORE_DATA_MESSAGE);
     } else {
         std::string response = "请选择要封禁/解封的用户 (第 " + std::to_string(page) + " 页，共 " + std::to_string(totalPages) + " 页):\n";
         nlohmann::json inlineKeyboard = nlohmann::json::array();
@@ -300,7 +289,7 @@ void Bot::processCallbackQuery(const nlohmann::json& callbackQuery) {
 }
 
 // 在 processUpdate 中处理回调查询
-void Bot::processUpdate(const nlohmann::json& update) {
+void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
     try {
         log(LogLevel::INFO, "Processing update: " + update.dump());
         if (update.contains("callback_query")) {
@@ -317,7 +306,9 @@ void Bot::processUpdate(const nlohmann::json& update) {
             std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
 
             std::string baseUrl = config.getWebhookUrl();
-            forwardMessageToChannel(message);
+            pool.enqueue([=, &message]() {
+                forwardMessageToChannel(message);
+            });
 
             // 处理命令
             if (message.contains("text")) {
@@ -427,12 +418,12 @@ void Bot::collectFile(const std::string& chatId, const std::string& userId, cons
 // remove命令：删除文件
 void Bot::removeFile(const std::string& chatId, const std::string& userId, const nlohmann::json& replyMessage) {
     std::vector<std::pair<std::string, std::string>> fileTypes = {
-        {"photo", "file_id"},
-        {"document", "file_id"},
-        {"video", "file_id"},
-        {"audio", "file_id"},
-        {"animation", "file_id"},
-        {"sticker", "file_id"}
+        {PHOTO, FILE_ID},
+        {"document", FILE_ID},
+        {"video", FILE_ID},
+        {"audio", FILE_ID},
+        {"animation", FILE_ID},
+        {"sticker", FILE_ID}
     };
 
     for (const auto& fileType : fileTypes) {
@@ -451,7 +442,7 @@ void Bot::removeFile(const std::string& chatId, const std::string& userId, const
     }
 
     // 如果没有匹配的文件类型
-    sendMessage(chatId, "无法处理该文件类型");
+    sendMessage(chatId, NOT_MATCHED_MESSAGE);
 }
 
 // ban命令：封禁用户（仅限拥有者）
@@ -460,7 +451,7 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
 
     // 禁止bot所属者封禁自己
     if (isOwner(targetUserId)) {
-        sendMessage(chatId, "无法封禁bot所属者。");
+        sendMessage(chatId, CANNOT_BANNED_OWNER_MESSAGE);
         return;
     }
 
@@ -477,11 +468,8 @@ void Bot::banUser(const std::string& chatId, const nlohmann::json& replyMessage)
 }
 
 void Bot::banUserById(const std::string& chatId, const std::string& targetUserId) {
-    // DBManager dbManager("bot_database.db");
-
-    // Prevent bot owner from banning themselves
     if (isOwner(targetUserId)) {
-        sendMessage(chatId, "不能封禁 bot 所属者。");
+        sendMessage(chatId, CANNOT_BANNED_OWNER_MESSAGE);
         return;
     }
 
@@ -498,19 +486,14 @@ void Bot::banUserById(const std::string& chatId, const std::string& targetUserId
 }
 
 void Bot::toggleBanUser(const std::string& chatId, const std::string& targetUserId, const std::string& messageId) {
-    // DBManager dbManager("bot_database.db");
-
-    // Prevent bot owner from being banned/unbanned
     if (isOwner(targetUserId)) {
-        sendMessage(chatId, "不能封禁/解封 bot 所属者。");
+        sendMessage(chatId, CANNOT_BANNED_OWNER_MESSAGE);
         return;
     }
 
-    // Check if user is registered
     if (dbManager.isUserRegistered(targetUserId)) {
         bool isBanned = dbManager.isUserBanned(targetUserId);
 
-        // Toggle the ban status
         if (isBanned) {
             dbManager.unbanUser(targetUserId);
             sendMessage(chatId, "用户已解封: " + targetUserId);
@@ -519,7 +502,6 @@ void Bot::toggleBanUser(const std::string& chatId, const std::string& targetUser
             sendMessage(chatId, "用户已被封禁: " + targetUserId);
         }
 
-        // Refresh the user list after toggling
         listUsersForBan(chatId, 1, 10, messageId);
     } else {
         sendMessage(chatId, "用户未注册，无法封禁/解封");
@@ -554,13 +536,12 @@ bool Bot::isOwner(const std::string& userId) {
 
 void Bot::sendMessage(const std::string& chatId, const std::string& message) {
     std::string sendMessageUrl = telegramApiUrl + "/bot" + apiToken + "/sendMessage?chat_id=" + chatId +"&parse_mode=MarkdownV2&text=" + buildTelegramUrl(escapeTelegramUrl(message));
-    // std::cout << "Request URL: " << sendMessageUrl << std::endl;
     sendHttpRequest(sendMessageUrl);
 }
 
-void Bot::handleWebhook(const nlohmann::json& webhookRequest) {
+void Bot::handleWebhook(const nlohmann::json& webhookRequest, ThreadPool& pool) {
     log(LogLevel::INFO, "Received Webhook: " + webhookRequest.dump());
-    processUpdate(webhookRequest);
+    processUpdate(webhookRequest, pool);
 }
 
 void Bot::editMessageWithKeyboard(const std::string& chatId, const std::string& messageId, const std::string& message, const std::string& keyboard) {

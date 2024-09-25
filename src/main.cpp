@@ -35,11 +35,6 @@ void setWebhook(const std::string& apiToken, const std::string& webhookUrl, cons
 
 int main(int argc, char* argv[]) {
     try {
-        // 设置SQLite为序列化模式，确保线程安全
-        // if (sqlite3_config(SQLITE_CONFIG_SERIALIZED) != SQLITE_OK) {
-        //     throw std::runtime_error("Failed to configure SQLite for serialization");
-        // }
-
         // 初始化数据库
         DBManager& dbManager = DBManager::getInstance();
         if (!dbManager.createTables()) {

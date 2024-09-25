@@ -9,6 +9,7 @@
 #include "StatisticsManager.h"
 #include "http_client.h"
 #include "PicGoHandler.h"
+#include "Constant.h"
 #include <memory>
 #include <fstream>
 #include <vector>
@@ -19,6 +20,7 @@
 #include <regex>
 #include <future>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 // 获取客户端真实 IP 地址
 std::string getClientIp(const httplib::Request& req) {
@@ -82,15 +84,13 @@ void handleRequestStatistics(const httplib::Request& req, httplib::Response& res
 
         // 更新服务使用统计数据
         auto periodStart = std::chrono::system_clock::now();
-
-        // 以下统计数据需要根据实际情况计算，这里仅作为示例
         int totalRequests = 1;  // 当前请求计数为 1
         int successfulRequests = (statusCode >= 200 && statusCode < 300) ? 1 : 0;
         int failedRequests = (statusCode >= 400) ? 1 : 0;
         int totalRequestSize = requestSize;
         int totalResponseSize = responseSize;
         int uniqueIps = 1;  // 当前请求的 IP 数为 1
-        int maxConcurrentRequests = 1;  // 简化处理，实际应用中应计算并发请求数
+        int maxConcurrentRequests = 1;
         int maxResponseTime = responseTime;
         int avgResponseTime = responseTime;
 
@@ -102,32 +102,19 @@ void handleRequestStatistics(const httplib::Request& req, httplib::Response& res
 
 // 确定文件类型
 std::string determineFileType(const std::string& requestPath) {
-    std::string fileType = "unknown";
-    auto pos = requestPath.rfind('.');
 
+    auto pos = requestPath.rfind('.');
     if (pos != std::string::npos) {
         std::string extension = requestPath.substr(pos + 1);
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower); // 转小写
-
-        // 根据扩展名确定文件类型
-        if (extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "gif" || extension == "bmp" || extension == "svg" || extension == "webp") {
-            fileType = "image";
-        } else if (extension == "mp4" || extension == "mkv" || extension == "avi" || extension == "mov" || extension == "flv" || extension == "wmv") {
-            fileType = "video";
-        } else if (extension == "mp3" || extension == "wav" || extension == "aac" || extension == "flac" || extension == "ogg") {
-            fileType = "audio";
-        } else if (extension == "txt" || extension == "html" || extension == "css" || extension == "js" || extension == "json" || extension == "xml") {
-            fileType = "text";
-        } else if (extension == "pdf" || extension == "doc" || extension == "docx" || extension == "xls" || extension == "xlsx" || extension == "ppt" || extension == "pptx") {
-            fileType = "document";
-        } else if (extension == "zip" || extension == "rar" || extension == "7z" || extension == "tar" || extension == "gz") {
-            fileType = "archive";
-        } else {
-            fileType = "other";
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+        
+        auto it = extensionMap.find(extension);
+        if (it != extensionMap.end()) {
+            return it->second;
         }
     }
-
-    return fileType;
+    
+    return "unknown";
 }
 
 // 加载模板文件
@@ -166,26 +153,18 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         handleImageRequest(req, res, apiToken, mimeTypes, cacheManager, rateLimiter, telegramApiUrl, config, dbManager);
     };
 
-    // 为路由设置通用的限流、Referer 验证和统计处理
+    // 限流、Referer 验证和统计处理
     auto registerMediaRoute = [&](const std::string& pattern) {
         svr->Get(pattern, [&config, &rateLimiter, mediaRequestHandler, &statisticsManager, &pool](const httplib::Request& req, httplib::Response& res) {
             // 记录请求到达时间
             auto requestArrivalTime = std::chrono::steady_clock::now();
 
             // 获取客户端 IP 地址
-            // std::string clientIp = req.remote_addr;
-            std::string clientIp;
-            if (req.has_header("X-Forwarded-For")) {
-                clientIp = req.get_header_value("X-Forwarded-For");
-            } else if (req.has_header("X-Real-IP")) {
-                clientIp = req.get_header_value("X-Real-IP");
-            } else {
-                clientIp = req.remote_addr;
-            }
+            std::string clientIp = getClientIp(req);
             std::string referer = req.get_header_value("Referer");
             log(LogLevel::INFO, "Request referer:  " + referer +", clientIP: " + clientIp);
 
-            // 进行限流检查
+            // 限流检查
             int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
             if (!rateLimiter.checkRateLimit(clientIp, maxRequestsPerMinute)) {
                 res.status = 429;
@@ -200,11 +179,9 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
                     return;
                 }
 
-                // 获取允许的 Referer 列表
                 std::vector<std::string> allowedReferers = config.getAllowedReferers();
                 std::unordered_set<std::string> allowedReferersSet(allowedReferers.begin(), allowedReferers.end());
 
-                // 检查 Referer 是否在允许的列表中
                 if (!rateLimiter.checkReferer(referer, allowedReferersSet)) {
                     res.status = 403;
                     res.set_content("Forbidden", "text/plain");
@@ -236,7 +213,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
     });
 
     // Webhook 路由
-    svr->Post("/webhook", [&bot, secretToken](const httplib::Request& req, httplib::Response& res) {
+    svr->Post("/webhook", [&bot, &pool, secretToken](const httplib::Request& req, httplib::Response& res) {
         if (!req.has_header("X-Telegram-Bot-Api-Secret-Token") || req.get_header_value("X-Telegram-Bot-Api-Secret-Token") != secretToken) {
             res.set_content("Unauthorized", "text/plain");
             res.status = 401;
@@ -245,7 +222,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
 
         try {
             nlohmann::json update = nlohmann::json::parse(req.body);
-            bot.handleWebhook(update);
+            bot.handleWebhook(update, pool);
             res.set_content("OK", "text/plain");
         } catch (const std::exception& e) {
             log(LogLevel::LOGERROR, "Error processing Webhook: " + std::string(e.what()));
