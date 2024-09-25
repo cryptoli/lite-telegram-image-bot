@@ -306,9 +306,7 @@ void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
             std::string chatType = message["chat"]["type"];  // 获取对话类型（private, group, supergroup 等）
 
             std::string baseUrl = config.getWebhookUrl();
-            pool.enqueue([=, &message]() {
-                forwardMessageToChannel(message);
-            });
+            
 
             // 处理命令
             if (message.contains("text")) {
@@ -322,6 +320,9 @@ void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
                 if (command == "/collect" && message.contains("reply_to_message")) {
                     const auto& replyMessage = message["reply_to_message"];
                     collectFile(chatId, userId, message["from"].value("username", "unknown"), replyMessage);
+                    pool.enqueue([=, &message]() {
+                        forwardMessageToChannel(message);
+                    });
                     return;
                 }
                 if (command == "/remove") {
@@ -366,6 +367,9 @@ void Bot::processUpdate(const nlohmann::json& update, ThreadPool& pool) {
             }
             if (chatType == "private") {
                 handleFileAndSend(chatId, userId, baseUrl, message, message["from"].value("username", "unknown"));
+                pool.enqueue([=, &message]() {
+                    forwardMessageToChannel(message);
+                });
             }
         }
     } catch (std::exception& e) {
