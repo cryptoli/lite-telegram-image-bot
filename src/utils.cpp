@@ -10,8 +10,10 @@
 #include <mutex>
 #include <openssl/evp.h>
 #include <cstring>
+#include "Constant.h"
 
-std::mutex logMutex;  // 用于保护日志写入的全局互斥锁
+std::mutex logMutex;
+std::ofstream logFile("bot.log", std::ios_base::app);
 
 // Base62 字符表
 const std::string BASE62_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -49,22 +51,18 @@ std::string getCurrentTime() {
 
 // 日志记录函数，带有线程安全保护
 void log(LogLevel level, const std::string& message) {
-    std::lock_guard<std::mutex> guard(logMutex);  // 使用互斥锁保护日志写入
+    std::lock_guard<std::mutex> guard(logMutex);
 
     std::string timestamp = getCurrentTime();
     std::string levelStr = logLevelToString(level);
     std::string formattedMessage = "[" + timestamp + "] [" + levelStr + "] " + message;
 
-    // 输出到日志文件
-    std::ofstream logFile("bot.log", std::ios_base::app);
     if (logFile.is_open()) {
         logFile << formattedMessage << std::endl;
-        logFile.close();
     } else {
         std::cerr << "Unable to open log file!" << std::endl;
     }
 
-    // 同时输出到控制台
     std::cout << formattedMessage << std::endl;
 }
 
@@ -121,31 +119,31 @@ std::string calculateSHA256(const std::string& input) {
 
     // 初始化 EVP 上下文，选择 SHA256 算法
     if (EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1) {
-        EVP_MD_CTX_free(mdctx);  // 释放上下文
+        EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("EVP_DigestInit_ex failed");
     }
 
     // 更新上下文，输入数据
     if (EVP_DigestUpdate(mdctx, input.c_str(), input.size()) != 1) {
-        EVP_MD_CTX_free(mdctx);  // 释放上下文
+        EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("EVP_DigestUpdate failed");
     }
 
     // 获取最终的哈希值
     unsigned int lengthOfHash = 0;
     if (EVP_DigestFinal_ex(mdctx, hash, &lengthOfHash) != 1) {
-        EVP_MD_CTX_free(mdctx);  // 释放上下文
+        EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("EVP_DigestFinal_ex failed");
     }
 
-    EVP_MD_CTX_free(mdctx);  // 释放上下文
+    EVP_MD_CTX_free(mdctx);
 
-    return std::string(reinterpret_cast<char*>(hash), lengthOfHash);  // 返回哈希值
+    return std::string(reinterpret_cast<char*>(hash), lengthOfHash);
 }
 
 // 将哈希值转换为 Base62 编码
 std::string encodeBase62(const std::string& input) {
-    std::string encoded;
+    std::stringstream encoded;
     uint64_t number = 0;
 
     // 将输入的哈希值转换为大整数
@@ -154,16 +152,22 @@ std::string encodeBase62(const std::string& input) {
     }
 
     while (number > 0) {
-        encoded.push_back(BASE62_ALPHABET[number % BASE]);
+        encoded << BASE62_ALPHABET[number % BASE];
         number /= BASE;
     }
 
-    std::reverse(encoded.begin(), encoded.end());
-    return encoded;
+    return encoded.str();
 }
 
 std::string generateShortLink(const std::string& fileId) {
     std::string hash = calculateSHA256(fileId);
+    std::string encoded = encodeBase62(hash);
 
-    return encodeBase62(hash).substr(0, 6);  // 取前 6 个字符
+    std::string shortLink;
+    size_t len = std::min(encoded.length(), static_cast<size_t>(urlLength));
+    for (size_t i = 0; i < len; ++i) {
+        shortLink += encoded[i % encoded.length()];
+    }
+
+    return shortLink;
 }

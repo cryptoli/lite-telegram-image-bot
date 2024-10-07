@@ -1,7 +1,5 @@
-// StatisticsManager.cpp
-
-#include "StatisticsManager.h"
-#include "db_manager.h"
+#include "db/StatisticsManager.h"
+#include "db/db_manager.h"
 #include "utils.h"
 #include <sstream>
 #include <iostream>
@@ -11,16 +9,13 @@ StatisticsManager::StatisticsManager(DBManager& dbManager) : dbManager(dbManager
 // 插入请求统计
 void StatisticsManager::insertRequestStatistics(const std::string& clientIp, const std::string& requestPath, const std::string& httpMethod,
                                                 int responseTime, int statusCode, int responseSize, int requestSize, const std::string& fileType, int requestLatency) {
-    // 从连接池中获取一个连接，保证线程独立的连接使用
     sqlite3* db = dbManager.getDbConnection();
 
     // 设置锁等待时间，避免频繁锁定
     sqlite3_busy_timeout(db, 5000);
 
-    // 开启事务
     sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
-    // 插入 request_statistics 表
     std::string query = "INSERT INTO request_statistics (client_ip, request_path, http_method, request_time, response_time, status_code, response_size, request_size, file_type, request_latency) "
                         "VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)";
     std::vector<SQLParam> params = {
@@ -28,13 +23,10 @@ void StatisticsManager::insertRequestStatistics(const std::string& clientIp, con
     };
     executeSQL(db, query, params);
 
-    // 更新 URL 统计信息，合并到一个事务中
+    // 更新 URL 统计信息
     updateTopUrlsInTransaction(db, std::chrono::system_clock::now(), requestPath);
-
-    // 提交事务
     sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
 
-    // 释放连接到连接池中
     dbManager.releaseDbConnection(db);
 }
 
@@ -79,11 +71,9 @@ void StatisticsManager::updateServiceUsage(const std::chrono::time_point<std::ch
     dbManager.releaseDbConnection(db);
 }
 
-// 执行 SQL 插入或更新
 void StatisticsManager::executeSQL(sqlite3* db, const std::string& query, const std::vector<SQLParam>& params) {
     sqlite3_stmt* stmt;
 
-    // 准备 SQL 语句
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
         // 绑定参数
         for (size_t i = 0; i < params.size(); ++i) {
@@ -102,13 +92,12 @@ void StatisticsManager::executeSQL(sqlite3* db, const std::string& query, const 
             }
         }
 
-        // 执行 SQL 语句
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            log(LogLevel::LOGERROR, query + " Failed to execute SQL statement: " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, query, " Failed to execute SQL statement: ", std::string(sqlite3_errmsg(db)));
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, query + " Failed to prepare SQL statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, query, " Failed to prepare SQL statement: ", std::string(sqlite3_errmsg(db)));
     }
 }
 
@@ -390,7 +379,6 @@ int StatisticsManager::executeCountQuery(const std::string& query, const std::ve
     int count = 0;
 
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        // 绑定参数
         for (size_t i = 0; i < params.size(); ++i) {
             int index = static_cast<int>(i + 1);
             const SQLParam& param = params[i];
@@ -401,14 +389,12 @@ int StatisticsManager::executeCountQuery(const std::string& query, const std::ve
             }
         }
 
-        // 执行查询并获取结果
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             count = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
     } else {
-        // std::cerr << "Failed to prepare SQL statement: " << sqlite3_errmsg(db) << std::endl;
-        log(LogLevel::LOGERROR, "executeCountQuery - Failed to prepare SQL statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "executeCountQuery - Failed to prepare SQL statement: ", std::string(sqlite3_errmsg(db)));
     }
 
     dbManager.releaseDbConnection(db);

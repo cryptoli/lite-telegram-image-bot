@@ -1,11 +1,12 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "PicGoHandler.h"
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include "utils.h"
 #include <regex>
-#include "httplib.h"
+#include "http/httplib.h"
+#include "server/PicGoHandler.h"
+#include "utils.h"
+#include "Constant.h"
 
 using json = nlohmann::json;
 
@@ -36,7 +37,7 @@ void PicGoHandler::handleUpload(const httplib::Request& req, httplib::Response& 
         return;
     }
 
-    // 上传到 Telegram
+    // 上传Telegram
     std::string telegramFileId;
     if (!uploadToTelegram(file.content, filename, MediaType::Photo, telegramFileId)) {
         res.status = 500;
@@ -47,13 +48,11 @@ void PicGoHandler::handleUpload(const httplib::Request& req, httplib::Response& 
     std::string shortId = generateShortLink(telegramFileId);
     std::string customUrl = config.getWebhookUrl() + "/d/" + shortId;
 
-    // 返回上传结果
     json result;
     result["success"] = true;
     result["file_id"] = telegramFileId;
     result["url"] = customUrl;
 
-    // 记录文件到数据库并发送消息
     if (!dbManager.addUserIfNotExists(userId, userName)) {
         log(LogLevel::LOGERROR, "Error adding user to database.");
     }
@@ -70,7 +69,7 @@ void PicGoHandler::handleUpload(const httplib::Request& req, httplib::Response& 
 bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::string& filename,
                                     MediaType mediaType, std::string& telegramFileId) {
     try {
-        log(LogLevel::INFO, "Starting uploadToTelegram for file: " + filename);
+        log(LogLevel::INFO, "Starting uploadToTelegram for file: ", filename);
 
         std::string apiMethod;
         std::string fileField;
@@ -98,7 +97,7 @@ bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::s
                 fileField = "audio";
                 break;
             default:
-                log(LogLevel::LOGERROR, "Unknown media type for file: " + filename);
+                log(LogLevel::LOGERROR, "Unknown media type for file: ", filename);
                 return false;
         }
 
@@ -107,7 +106,7 @@ bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::s
         httplib::Client cli(apiUrl);
 
         if (!cli.is_valid()) {
-            log(LogLevel::LOGERROR, "HTTP client initialization failed for apiUrl: " + apiUrl);
+            log(LogLevel::LOGERROR, "HTTP client initialization failed for apiUrl: ", apiUrl);
             return false;
         }
 
@@ -131,19 +130,19 @@ bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::s
             return false;
         }
 
-        log(LogLevel::INFO, "Received response from Telegram API, status code: " +
+        log(LogLevel::INFO, "Received response from Telegram API, status code: ",
                             std::to_string(res->status));
 
         if (res->status != 200) {
-            log(LogLevel::LOGERROR, "Unexpected status code from Telegram API: " +
+            log(LogLevel::LOGERROR, "Unexpected status code from Telegram API: ",
                                     std::to_string(res->status));
-            log(LogLevel::LOGERROR, "Response body: " + res->body);
+            log(LogLevel::LOGERROR, "Response body: ", res->body);
             return false;
         }
 
         auto responseJson = json::parse(res->body);
 
-        if (responseJson["ok"].template get<bool>()) {
+        if (responseJson[OK].template get<bool>()) {
             if (mediaType == MediaType::Photo) {
                 telegramFileId = responseJson["result"]["photo"].back()["file_id"].template get<std::string>();
             } else if (mediaType == MediaType::Document) {
@@ -159,14 +158,14 @@ bool PicGoHandler::uploadToTelegram(const std::string& fileContent, const std::s
                 return false;
             }
 
-            log(LogLevel::INFO, "File uploaded successfully, Telegram file ID: " + telegramFileId);
+            log(LogLevel::INFO, "File uploaded successfully, Telegram file ID: ", telegramFileId);
             return true;
         } else {
-            log(LogLevel::LOGERROR, "Telegram API returned an error: " + res->body);
+            log(LogLevel::LOGERROR, "Telegram API returned an error: ", res->body);
         }
 
     } catch (const std::exception& e) {
-        log(LogLevel::LOGERROR, "Exception occurred: " + std::string(e.what()));
+        log(LogLevel::LOGERROR, "Exception occurred: ", std::string(e.what()));
         return false;
     }
 
@@ -180,13 +179,13 @@ bool PicGoHandler::createDirectoryIfNotExists(const std::string& path) {
     if (attributes == INVALID_FILE_ATTRIBUTES) {
         // 目录不存在，尝试创建
         if (!CreateDirectoryA(path.c_str(), NULL)) {
-            log(LogLevel::LOGERROR, "Failed to create directory: " + path +
-                                    ", error code: " + std::to_string(GetLastError()));
+            log(LogLevel::LOGERROR, "Failed to create directory: ", path,
+                                    ", error code: ", std::to_string(GetLastError()));
             return false;
         }
     } else if (!(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
         // 路径存在，但不是目录
-        log(LogLevel::LOGERROR, "Path exists but is not a directory: " + path);
+        log(LogLevel::LOGERROR, "Path exists but is not a directory: ", path);
         return false;
     }
     return true;
@@ -196,13 +195,13 @@ bool PicGoHandler::createDirectoryIfNotExists(const std::string& path) {
     if (stat(path.c_str(), &info) != 0) {
         // 目录不存在，尝试创建
         if (mkdir(path.c_str(), 0755) != 0) {
-            log(LogLevel::LOGERROR, "Failed to create directory: " + path +
-                                    ", error: " + strerror(errno));
+            log(LogLevel::LOGERROR, "Failed to create directory: ", path,
+                                    ", error: ", strerror(errno));
             return false;
         }
     } else if (!S_ISDIR(info.st_mode)) {
         // 路径存在，但不是目录
-        log(LogLevel::LOGERROR, "Path exists but is not a directory: " + path);
+        log(LogLevel::LOGERROR, "Path exists but is not a directory: ", path);
         return false;
     }
     return true;

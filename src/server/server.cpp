@@ -1,13 +1,13 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "server.h"
-#include "request_handler.h"
+#include "server/server.h"
+#include "server/request_handler.h"
 #include "utils.h"
-#include "httplib.h"
-#include "bot.h"
-#include "db_manager.h"
-#include "CacheManager.h"
-#include "http_client.h"
-#include "PicGoHandler.h"
+#include "http/httplib.h"
+#include "server/bot.h"
+#include "db/db_manager.h"
+#include "cache/CacheManager.h"
+#include "http/http_client.h"
+#include "server/PicGoHandler.h"
 #include "Constant.h"
 #include <memory>
 #include <fstream>
@@ -92,7 +92,7 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
             bot.handleWebhook(update, pool);
             res.set_content("OK", "text/plain");
         } catch (const std::exception& e) {
-            log(LogLevel::LOGERROR, "Error processing Webhook: " + std::string(e.what()));
+            log(LogLevel::LOGERROR, "Error processing Webhook: ", std::string(e.what()));
             res.set_content("Bad Request", "text/plain");
             res.status = 400;
         }
@@ -172,18 +172,17 @@ void startServer(const Config& config, ImageCacheManager& cacheManager, ThreadPo
         }
     });
 
-    // 启动服务器
     std::future<void> serverFuture = pool.enqueue([&svr, hostname, port]() {
-        log(LogLevel::INFO,"Server running on port: " + std::to_string(port));
+        log(LogLevel::INFO,"Server running on port: ", std::to_string(port));
         if (!svr->listen(hostname.c_str(), port)) {
-            log(LogLevel::LOGERROR,"Error: Server failed to start on port: " + std::to_string(port));
+            log(LogLevel::LOGERROR,"Error: Server failed to start on port: ", std::to_string(port));
         }
     });
 
     try {
         serverFuture.get();
     } catch (const std::system_error& e) {
-        log(LogLevel::LOGERROR, "System error occurred: " + std::string(e.what()));
+        log(LogLevel::LOGERROR, "System error occurred: ", std::string(e.what()));
         throw;
     }
 }

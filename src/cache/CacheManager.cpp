@@ -159,10 +159,10 @@ void CacheManager::startCleanupThread() {
             std::unique_lock<std::mutex> lock(cacheMutex);
             // 等待清理间隔时间或 stopThread 为 true 时唤醒
             if (cv.wait_for(lock, std::chrono::seconds(cleanupIntervalSeconds), [this]() { return stopThread; })) {
-                break; // 如果 stopThread 为 true，退出线程
+                break; 
             }
-            lock.unlock();  // 解锁，允许其他线程使用 cacheMutex
-            cleanupExpiredCache();  // 执行清理操作
+            lock.unlock();
+            cleanupExpiredCache();
         }
     });
 }

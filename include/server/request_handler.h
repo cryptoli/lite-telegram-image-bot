@@ -3,14 +3,13 @@
 
 #include <string>
 #include <map>
-#include <httplib.h>
-#include "image_cache_manager.h"
-#include "db_manager.h"
+#include <http/httplib.h>
+#include "cache/image_cache_manager.h"
+#include "db/db_manager.h"
 #include "config.h"
-#include "CacheManager.h"
-#include "thread_pool.h"
-#include "CacheManager.h"
-#include "StatisticsManager.h"
+#include "cache/CacheManager.h"
+#include "thread/thread_pool.h"
+#include "db/StatisticsManager.h"
 
 // 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType);

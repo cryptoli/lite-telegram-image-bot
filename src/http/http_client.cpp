@@ -41,21 +41,18 @@ std::string sendHttpRequest(const std::string& url) {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);  // 自动处理重定向
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);        // 设置超时时间
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
         // 使用共享连接池来减少连接开销
         curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, 60L);
-        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);   // 启用TCP Keep-Alive
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            log(LogLevel::LOGERROR, "curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)) + " URL: " + url);
+            log(LogLevel::LOGERROR, "curl_easy_perform() failed: ", std::string(curl_easy_strerror(res)), " URL: ", url);
         } 
-        // else {
-        //     log(LogLevel::INFO,"API Response: " + std::string(response) );
-        // }
-        curl_easy_cleanup(curl);  // 清理当前线程的CURL句柄
+        curl_easy_cleanup(curl);
     } else {
         log(LogLevel::LOGERROR, "Failed to initialize CURL.");
     }

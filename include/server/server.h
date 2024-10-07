@@ -3,13 +3,13 @@
 
 #include <string>
 #include <functional>
-#include "httplib.h"
+#include "http/httplib.h"
 #include "config.h"
-#include "CacheManager.h"
-#include "thread_pool.h"
-#include "StatisticsManager.h"
-#include "image_cache_manager.h"
-#include "bot.h"
+#include "cache/CacheManager.h"
+#include "thread/thread_pool.h"
+#include "db/StatisticsManager.h"
+#include "cache/image_cache_manager.h"
+#include "server/bot.h"
 
 // 获取客户端真实 IP 地址
 std::string getClientIp(const httplib::Request& req);

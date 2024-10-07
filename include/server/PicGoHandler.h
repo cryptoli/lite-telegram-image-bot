@@ -3,8 +3,8 @@
 
 #include <string>
 #include "config.h"
-#include "httplib.h"
-#include "db_manager.h"
+#include "http/httplib.h"
+#include "db/db_manager.h"
 
 enum class MediaType {
     Photo,

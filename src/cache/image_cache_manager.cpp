@@ -28,7 +28,7 @@ ImageCacheManager::ImageCacheManager(const std::string& cacheDir, size_t maxDisk
         this->cacheDir = std::string(absolutePath);
     } else {
         this->cacheDir = cacheDir;
-        log(LogLevel::LOGERROR, "Failed to resolve cache directory to absolute path: " + cacheDir);
+        log(LogLevel::LOGERROR, "Failed to resolve cache directory to absolute path: ", cacheDir);
     }
 
     if (!directoryExists(this->cacheDir)) {
@@ -37,7 +37,7 @@ ImageCacheManager::ImageCacheManager(const std::string& cacheDir, size_t maxDisk
 #else
         mkdir(this->cacheDir.c_str(), 0777);
 #endif
-        log(LogLevel::INFO, "Created cache directory: " + this->cacheDir);
+        log(LogLevel::INFO, "Created cache directory: ", this->cacheDir);
     }
 
     cleanerThread = std::thread(&ImageCacheManager::cleanUpFilesOnDiskSpaceLimit, this);
@@ -59,12 +59,12 @@ void ImageCacheManager::cacheImage(const std::string& fileId, const std::string&
     if (file.is_open()) {
         file.write(imageData.c_str(), imageData.size());
         file.close();
-        log(LogLevel::INFO, "Cached image: " + fileId + " at " + filePath);
+        log(LogLevel::INFO, "Cached image: ", fileId, " at ", filePath);
 
         // 检查缓存大小是否超出限制
         cleanUpFilesOnDiskSpaceLimit();
     } else {
-        log(LogLevel::LOGERROR, "Failed to open file for caching: " + filePath);
+        log(LogLevel::LOGERROR, "Failed to open file for caching: ", filePath);
     }
 }
 
@@ -76,13 +76,13 @@ std::string ImageCacheManager::getCachedImage(const std::string& fileId, const s
         std::ifstream file(filePath.c_str(), std::ios::binary);
         if (file.is_open()) {
             std::string imageData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            log(LogLevel::INFO, "Cache hit: " + fileId + " from " + filePath);
+            log(LogLevel::INFO, "Cache hit: ", fileId, " from ", filePath);
             return imageData;
         } else {
-            log(LogLevel::LOGERROR, "Failed to open cached file: " + filePath);
+            log(LogLevel::LOGERROR, "Failed to open cached file: ", filePath);
         }
     } else {
-        log(LogLevel::WARNING, "Cache miss for file ID: " + fileId);
+        log(LogLevel::WARNING, "Cache miss for file ID: ", fileId);
     }
 
     return "";
@@ -221,9 +221,9 @@ void ImageCacheManager::cleanUpFilesOnDiskSpaceLimit() {
             size_t fileSize = getFileSize(filePath);
             if (remove(filePath.c_str()) == 0) {
                 currentCacheSize -= fileSize;
-                log(LogLevel::INFO, "Removed image due to disk space limit: " + filePath);
+                log(LogLevel::INFO, "Removed image due to disk space limit: ", filePath);
             } else {
-                log(LogLevel::LOGERROR, "Failed to remove file: " + filePath);
+                log(LogLevel::LOGERROR, "Failed to remove file: ", filePath);
             }
         }
 

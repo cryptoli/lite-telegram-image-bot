@@ -1,4 +1,4 @@
-#include "db_manager.h"
+#include "db/db_manager.h"
 #include "utils.h"
 #include <iostream>
 #include <mutex>
@@ -54,18 +54,17 @@ sqlite3* DBManager::getDbConnection() {
     if (currentConnectionCount < maxPoolSize) {
         sqlite3* db = nullptr;
         if (sqlite3_open_v2(dbFile.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
-            log(LogLevel::LOGERROR, "Can't open database: " + std::string(sqlite3_errmsg(db)));
-            return nullptr;  // 确保在失败时返回 nullptr
+            log(LogLevel::LOGERROR, "Can't open database: ", std::string(sqlite3_errmsg(db)));
+            return nullptr;
         } else {
-            ++currentConnectionCount;  // 增加连接计数
-            return db;  // 动态创建新连接并返回
+            ++currentConnectionCount;
+            return db;
         }
     }
 
     // 如果连接池已满，等待有连接释放
     poolCondition.wait(lock, [this]() { return !connectionPool.empty(); });
 
-    // 返回空闲的数据库连接
     if (!connectionPool.empty()) {
         sqlite3* db = connectionPool.front();
         connectionPool.pop();
@@ -99,9 +98,9 @@ void DBManager::cleanupIdleConnections() {
         if (idleTimeIt != connectionIdleTime.end()) {
             auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - idleTimeIt->second).count();
             if (idleDuration >= maxIdleTimeSeconds) {
-                sqlite3_close(db);  // 关闭连接
-                --currentConnectionCount;  // 减少连接计数
-                connectionIdleTime.erase(idleTimeIt);  // 移除记录
+                sqlite3_close(db);
+                --currentConnectionCount;
+                connectionIdleTime.erase(idleTimeIt);
                 continue;  // 不将此连接放回队列
             }
         }
@@ -121,8 +120,8 @@ void DBManager::closeAllConnections() {
     while (!connectionPool.empty()) {
         sqlite3* db = connectionPool.front();
         connectionPool.pop();
-        sqlite3_close(db);  // 关闭数据库连接
-        --currentConnectionCount;  // 减少连接计数
+        sqlite3_close(db);
+        --currentConnectionCount;
     }
     connectionIdleTime.clear();
 }
@@ -132,7 +131,6 @@ bool DBManager::createTables() {
     char* errMsg = nullptr;
     int rc;
 
-    // Helper lambda function to check if a column exists in a table
     auto columnExists = [&](const std::string& tableName, const std::string& columnName) -> bool {
         std::string query = "PRAGMA table_info(" + tableName + ");";
         bool found = false;
@@ -150,19 +148,18 @@ bool DBManager::createTables() {
         return found;
     };
 
-    // Function to add column if it does not exist
     auto addColumnIfNotExists = [&](const std::string& tableName, const std::string& columnName, const std::string& columnDefinition) {
         if (!columnExists(tableName, columnName)) {
             std::string alterSQL = "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition + ";";
             rc = sqlite3_exec(db, alterSQL.c_str(), 0, 0, &errMsg);
             if (rc != SQLITE_OK) {
-                log(LogLevel::LOGERROR, "Failed to add column '" + columnName + "' in table '" + tableName + "': " + std::string(errMsg));
+                log(LogLevel::LOGERROR, "Failed to add column '", columnName, "' in table '", tableName, "': ", std::string(errMsg));
                 sqlite3_free(errMsg);
                 return false;
             }
-            log(LogLevel::INFO, "Column '" + columnName + "' added to table '" + tableName + "'.");
+            log(LogLevel::INFO, "Column '", columnName, "' added to table '", tableName, "'.");
         } else {
-            log(LogLevel::INFO, "Column '" + columnName + "' already exists in table '" + tableName + "'.");
+            log(LogLevel::INFO, "Column '", columnName, "' already exists in table '", tableName, "'.");
         }
         return true;
     };
@@ -182,7 +179,7 @@ bool DBManager::createTables() {
                                   "request_latency INTEGER NOT NULL);";
     rc = sqlite3_exec(db, requestTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Request Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Request Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -198,7 +195,7 @@ bool DBManager::createTables() {
                                         "PRIMARY KEY (period_start, url));";
     rc = sqlite3_exec(db, topUrlsPeriodTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Top URLs Period Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Top URLs Period Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -212,7 +209,7 @@ bool DBManager::createTables() {
                                          "total_request_count INTEGER NOT NULL);";
     rc = sqlite3_exec(db, topUrlsHistoryTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Top URLs History Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Top URLs History Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -235,7 +232,7 @@ bool DBManager::createTables() {
                                        "PRIMARY KEY (period_start));";
     rc = sqlite3_exec(db, serviceUsageTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Service Usage Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Service Usage Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -252,7 +249,7 @@ bool DBManager::createTables() {
                                "updated_at TEXT DEFAULT (datetime('now')));";
     rc = sqlite3_exec(db, userTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (User Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (User Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -276,7 +273,7 @@ bool DBManager::createTables() {
                                       "END;";
     rc = sqlite3_exec(db, userTableTriggerSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (User Table Trigger): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (User Table Trigger): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -299,7 +296,7 @@ bool DBManager::createTables() {
                                "updated_at TEXT DEFAULT (datetime('now')));";
     rc = sqlite3_exec(db, fileTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (File Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (File Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -324,7 +321,7 @@ bool DBManager::createTables() {
                                "CREATE INDEX IF NOT EXISTS idx_files_file_id ON files(file_id);";
     rc = sqlite3_exec(db, fileIndexSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (File Table Index): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (File Table Index): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -340,7 +337,7 @@ bool DBManager::createTables() {
                                       "END;";
     rc = sqlite3_exec(db, fileTableTriggerSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (File Table Trigger): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (File Table Trigger): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -356,7 +353,7 @@ bool DBManager::createTables() {
                                    "updated_at TEXT DEFAULT (datetime('now')));";
     rc = sqlite3_exec(db, settingsTableSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Settings Table): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Settings Table): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -388,7 +385,7 @@ bool DBManager::createTables() {
                                           "END;";
     rc = sqlite3_exec(db, settingsTableTriggerSQL, 0, 0, &errMsg);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "SQL error (Settings Table Trigger): " + std::string(errMsg));
+        log(LogLevel::LOGERROR, "SQL error (Settings Table Trigger): ", std::string(errMsg));
         sqlite3_free(errMsg);
         releaseDbConnection(db);
         return false;
@@ -413,7 +410,7 @@ bool DBManager::isUserRegistered(const std::string& telegramId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "isUserRegistered - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "isUserRegistered - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return userExists;
@@ -438,7 +435,7 @@ bool DBManager::addUserIfNotExists(const std::string& telegramId, const std::str
     sqlite3_stmt* stmt;
     rc = sqlite3_prepare_v2(db, insertSQL.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare INSERT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to prepare INSERT statement: ", std::string(sqlite3_errmsg(db)));
         sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
         releaseDbConnection(db);
         return false;
@@ -472,7 +469,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     sqlite3_stmt* checkStmt;
     int rc = sqlite3_prepare_v2(db, checkFileSQL.c_str(), -1, &checkStmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "addFile - Failed to prepare SELECT statement addFile (File Check): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "addFile - Failed to prepare SELECT statement addFile (File Check): ", std::string(sqlite3_errmsg(db)));
         sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
         releaseDbConnection(db);
         return false;
@@ -483,7 +480,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
     rc = sqlite3_step(checkStmt);
     
     if (rc != SQLITE_ROW) {
-        log(LogLevel::LOGERROR, "Failed to step SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to step SELECT statement: ", std::string(sqlite3_errmsg(db)));
         sqlite3_finalize(checkStmt);
         sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
         releaseDbConnection(db);
@@ -507,7 +504,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         sqlite3_stmt* updateStmt;
         rc = sqlite3_prepare_v2(db, updateFileSQL.c_str(), -1, &updateStmt, nullptr);
         if (rc != SQLITE_OK) {
-            log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (File): " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (File): ", std::string(sqlite3_errmsg(db)));
             sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
             releaseDbConnection(db);
             return false;
@@ -525,7 +522,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         sqlite3_finalize(updateStmt);
 
         if (rc != SQLITE_DONE) {
-            log(LogLevel::LOGERROR, "Failed to update file record: " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, "Failed to update file record: ", std::string(sqlite3_errmsg(db)));
             sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
             releaseDbConnection(db);
             return false;
@@ -539,7 +536,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         sqlite3_stmt* insertStmt;
         rc = sqlite3_prepare_v2(db, insertFileSQL.c_str(), -1, &insertStmt, nullptr);
         if (rc != SQLITE_OK) {
-            log(LogLevel::LOGERROR, "Failed to prepare INSERT statement (File): " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, "Failed to prepare INSERT statement (File): ", std::string(sqlite3_errmsg(db)));
             sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
             releaseDbConnection(db);
             return false;
@@ -558,7 +555,7 @@ bool DBManager::addFile(const std::string& userId, const std::string& fileId, co
         sqlite3_finalize(insertStmt);
 
         if (rc != SQLITE_DONE) {
-            log(LogLevel::LOGERROR, "Failed to insert file record: " + std::string(sqlite3_errmsg(db)));
+            log(LogLevel::LOGERROR, "Failed to insert file record: ", std::string(sqlite3_errmsg(db)));
             sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
             releaseDbConnection(db);
             return false;
@@ -580,19 +577,19 @@ bool DBManager::removeFile(const std::string& userId, const std::string& fileNam
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(db, deleteSQL.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare DELETE statement (File): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to prepare DELETE statement (File): ", std::string(sqlite3_errmsg(db)));
         releaseDbConnection(db);
         return false;
     }
 
-    log(LogLevel::INFO, "Attempting to delete file with userId: " + userId + " and fileName: " + fileName);
+    log(LogLevel::INFO, "Attempting to delete file with userId: ", userId, " and fileName: ", fileName);
 
     sqlite3_bind_text(stmt, 1, std::move(fileName.c_str()), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, std::move(userId.c_str()), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE) {
-        log(LogLevel::LOGERROR, "Failed to delete file record: " + std::string(sqlite3_errmsg(db)) + " Error code: " + std::to_string(rc));
+        log(LogLevel::LOGERROR, "Failed to delete file record: ", std::string(sqlite3_errmsg(db)), " Error code: ", std::to_string(rc));
         sqlite3_finalize(stmt);
         releaseDbConnection(db);
         return false;
@@ -618,7 +615,7 @@ bool DBManager::banUser(const std::string& telegramId) {
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(db, updateSQL.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (User Ban): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (User Ban): ", std::string(sqlite3_errmsg(db)));
         releaseDbConnection(db);
         return false;
     }
@@ -636,7 +633,7 @@ bool DBManager::unbanUser(const std::string& telegramId) {
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(db, updateSQL.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
-        log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (User Unban): " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to prepare UPDATE statement (User Unban): ", std::string(sqlite3_errmsg(db)));
         releaseDbConnection(db);
         return false;
     }
@@ -666,7 +663,7 @@ std::vector<std::tuple<std::string, std::string, std::string>> DBManager::getUse
         files.emplace_back(fileName, fileLink, fileId);
     }
     sqlite3_finalize(stmt);
-    log(LogLevel::INFO, "Fetched " + std::to_string(files.size()) + " files for user ID: " + userId + " (Page: " + std::to_string(page) + ")");
+    log(LogLevel::INFO, "Fetched ", std::to_string(files.size()), " files for user ID: ", userId, " (Page: ", std::to_string(page), ")");
     releaseDbConnection(db);
     return files;
 }
@@ -684,7 +681,7 @@ int DBManager::getUserFileCount(const std::string& userId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "getUserFileCount - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getUserFileCount - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return count;
@@ -692,32 +689,26 @@ int DBManager::getUserFileCount(const std::string& userId) {
 
 std::string DBManager::getFileIdByShortId(const std::string& shortId) {
     sqlite3* db = getDbConnection();
-    std::string query = "SELECT file_id FROM files WHERE short_id = ? LIMIT 1";  // 添加 LIMIT 1 只取第一条
+    std::string query = "SELECT file_id FROM files WHERE short_id = ? LIMIT 1";
     sqlite3_stmt* stmt;
-    std::string fileId;  // 初始化为空字符串
+    std::string fileId;
 
     // 准备 SQL 语句
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        // 绑定 shortId 参数
         sqlite3_bind_text(stmt, 1, std::move(shortId.c_str()), -1, SQLITE_STATIC);
-
-        // 执行查询并获取结果
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            // 使用 sqlite3_column_text 获取字符串数据
             const unsigned char* result = sqlite3_column_text(stmt, 0);
             if (result != nullptr) {
-                fileId = reinterpret_cast<const char*>(result);  // 将返回值转换为 std::string
+                fileId = reinterpret_cast<const char*>(result);
             }
         }
 
-        sqlite3_finalize(stmt);  // 释放 stmt 资源
+        sqlite3_finalize(stmt);
     } else {
-        // 如果查询失败，打印错误日志
-        log(LogLevel::LOGERROR, "getFileIdByShortId - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getFileIdByShortId - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
 
-    // 打印日志
-    log(LogLevel::INFO, "Select file_id by short_id: " + shortId + ", file ID: " + fileId);
+    log(LogLevel::INFO, "Select file_id by short_id: ", shortId, ", file ID: ", fileId);
     releaseDbConnection(db);
     return fileId;
 }
@@ -734,7 +725,7 @@ void DBManager::setRegistrationOpen(bool isOpen) {
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) {
-        log(LogLevel::LOGERROR, "Failed to update registration setting: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "Failed to update registration setting: ", std::string(sqlite3_errmsg(db)));
     } else {
         log(LogLevel::INFO, "Registration setting updated successfully.");
     }
@@ -752,7 +743,7 @@ bool DBManager::isRegistrationOpen() {
         std::string value = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
         sqlite3_finalize(stmt);
         bool isOpen = value == "1";
-        log(LogLevel::INFO, "Registration is " + std::string(isOpen ? "open" : "closed") + ".");
+        log(LogLevel::INFO, "Registration is ", std::string(isOpen ? "open" : "closed"), ".");
         releaseDbConnection(db);
         return isOpen;
     }
@@ -774,7 +765,7 @@ int DBManager::getTotalUserCount() {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "getTotalUserCount - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getTotalUserCount - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return count;
@@ -798,7 +789,7 @@ std::vector<std::tuple<std::string, std::string, bool>> DBManager::getUsersForBa
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "getUsersForBan - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getUsersForBan - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return users;
@@ -817,7 +808,7 @@ bool DBManager::isUserBanned(const std::string& telegramId) {
         }
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "isUserBanned - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "isUserBanned - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
     releaseDbConnection(db);
     return isBanned;
@@ -856,7 +847,7 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> DBMa
         
         sqlite3_finalize(stmt);
     } else {
-        log(LogLevel::LOGERROR, "getImagesAndVideos - Failed to prepare SELECT statement: " + std::string(sqlite3_errmsg(db)));
+        log(LogLevel::LOGERROR, "getImagesAndVideos - Failed to prepare SELECT statement: ", std::string(sqlite3_errmsg(db)));
     }
 
     releaseDbConnection(db);

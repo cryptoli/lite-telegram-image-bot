@@ -1,8 +1,8 @@
-#include "request_handler.h"
-#include "http_client.h"
+#include "server/request_handler.h"
+#include "http/http_client.h"
 #include "utils.h"
 #include "config.h"
-#include "db_manager.h"
+#include "db/db_manager.h"
 #include "Constant.h"
 #include <nlohmann/json.hpp>
 #include <regex>
@@ -193,7 +193,7 @@ void unifiedInterceptor(const httplib::Request& req, httplib::Response& res, con
     // 2. 获取客户端 IP 地址和 Referer
     std::string clientIp = getClientIp(req);
     std::string referer = req.get_header_value("Referer");
-    log(LogLevel::INFO, "Request referer:  " + referer +", clientIP: " + clientIp);
+    log(LogLevel::INFO, "Request referer:  ", referer,", clientIP: ", clientIp);
 
     // 3. 限流检查
     int maxRequestsPerMinute = config.getRateLimitRequestsPerMinute();
@@ -203,7 +203,7 @@ void unifiedInterceptor(const httplib::Request& req, httplib::Response& res, con
         return; 
     }
 
-    // 4. Referer 验证 (如果启用)
+    // 4. Referer 验证
     if (config.enableReferers()) {
         if (referer.empty()) {
             res.status = 403;
@@ -222,7 +222,6 @@ void unifiedInterceptor(const httplib::Request& req, httplib::Response& res, con
     }
 
     // 5. 登录认证 TODO
-    // ...
 
     // 6. 调用实际处理函数
     auto startProcessingTime = std::chrono::steady_clock::now();
@@ -239,18 +238,18 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     }
 
     std::string shortId = req.matches[1];
-    std::string fileId = (shortId.length() > 6) ? shortId : dbManager.getFileIdByShortId(shortId);
+    std::string fileId = (shortId.length() > urlLength) ? shortId : dbManager.getFileIdByShortId(shortId);
 
     // 验证 fileId 的合法性
-    std::regex fileIdRegex("^[A-Za-z0-9_-]+$");
+    std::regex fileIdRegex(FILE_ID_REGEX);
     if (!std::regex_match(fileId, fileIdRegex)) {
         res.status = 400;
         res.set_content("Invalid File ID", "text/plain");
-        log(LogLevel::LOGERROR, "Invalid file ID received: " + fileId);
+        log(LogLevel::LOGERROR, "Invalid file ID received: ", fileId);
         return;
     }
 
-    log(LogLevel::INFO, "Checking file path from memory cache for file ID: " + fileId);
+    log(LogLevel::INFO, "Checking file path from memory cache for file ID: ", fileId);
 
     // Step 1: 从 memoryCache 中获取 filePath 是否存在
     std::string cachedFilePath;
@@ -261,21 +260,21 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     // 如果 memory 缓存命中，检查 image 缓存（磁盘）是否命中
     if (isMemoryCacheHit) {
-        log(LogLevel::INFO, "Memory cache hit for file ID: " + fileId + ". Checking image cache.");
+        log(LogLevel::INFO, "Memory cache hit for file ID: ", fileId, ". Checking image cache.");
         std::string cachedImageData = cacheManager.getCachedImage(fileId, preferredExtension);
 
         if (!cachedImageData.empty()) {
-            log(LogLevel::INFO, "Image cache hit for file ID: " + fileId);
+            log(LogLevel::INFO, "Image cache hit for file ID: ", fileId);
             // 获取文件的 MIME 类型
             std::string mimeType = getMimeType(cachedFilePath, mimeTypes);
             // 返回缓存的文件数据
             setHttpResponse(res, cachedImageData, mimeType, req);
             return;
         } else {
-            log(LogLevel::INFO, "Image cache miss for file ID: " + fileId + ". Downloading from Telegram.");
+            log(LogLevel::INFO, "Image cache miss for file ID: ", fileId, ". Downloading from Telegram.");
         }
     } else {
-        log(LogLevel::INFO, "Memory cache miss. Requesting file information from Telegram for file ID: " + fileId);
+        log(LogLevel::INFO, "Memory cache miss. Requesting file information from Telegram for file ID: ", fileId);
 
         // 如果 memoryCache 中没有 filePath，调用 getFile 接口获取文件路径
         std::string telegramFileUrl = telegramApiUrl + "/bot" + apiToken + "/getFile?file_id=" + fileId;
@@ -291,14 +290,13 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
         nlohmann::json jsonResponse = nlohmann::json::parse(fileResponse);
         if (jsonResponse.contains("result") && jsonResponse["result"].contains("file_path")) {
             cachedFilePath = jsonResponse["result"]["file_path"];
-            log(LogLevel::INFO, "Retrieved file path: " + cachedFilePath);
+            log(LogLevel::INFO, "Retrieved file path: ", cachedFilePath);
 
-            // 将 filePath 存入 memoryCache
             memoryCache.addFilePathCache(fileId, cachedFilePath, 3600);
         } else {
             res.status = 404;
             res.set_content("File Not Found", "text/plain");
-            log(LogLevel::LOGERROR, "File not found in Telegram for ID: " + fileId);
+            log(LogLevel::LOGERROR, "File not found in Telegram for ID: ", fileId);
             return;
         }
     }
@@ -308,7 +306,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     // 如果文件是视频或文档，直接流式传输而不缓存
     if (mimeType.find("video") != std::string::npos || mimeType.find("application") != std::string::npos) {
-        log(LogLevel::INFO, "Streaming file directly from Telegram (no caching) for MIME type: " + mimeType);
+        log(LogLevel::INFO, "Streaming file directly from Telegram (no caching) for MIME type: ", mimeType);
         std::string telegramFileDownloadUrl = telegramApiUrl + "/file/bot" + apiToken + "/" + cachedFilePath;
         handleStreamRequest(req, res, telegramFileDownloadUrl, mimeType);
         return;
@@ -321,7 +319,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
     if (fileData.empty()) {
         res.status = 500;
         res.set_content("Failed to download file from Telegram", "text/plain");
-        log(LogLevel::LOGERROR, "Failed to download file from Telegram for file path: " + cachedFilePath);
+        log(LogLevel::LOGERROR, "Failed to download file from Telegram for file path: ", cachedFilePath);
         return;
     }
 
@@ -331,7 +329,7 @@ void handleImageRequest(const httplib::Request& req, httplib::Response& res, con
 
     // 返回文件
     setHttpResponse(res, fileData, mimeType, req);
-    log(LogLevel::INFO, "Successfully served and cached file for file ID: " + fileId);
+    log(LogLevel::INFO, "Successfully served and cached file for file ID: ", fileId);
 }
 
 void setHttpResponse(httplib::Response& res, const std::string& fileData, const std::string& mimeType, const httplib::Request& req) {
