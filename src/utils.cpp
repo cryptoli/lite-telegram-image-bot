@@ -10,7 +10,7 @@
 #include <mutex>
 #include <openssl/evp.h>
 #include <cstring>
-#include "Constant.h"
+#include "constant.h"
 
 std::mutex logMutex;
 std::ofstream logFile("bot.log", std::ios_base::app);

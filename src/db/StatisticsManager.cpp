@@ -1,4 +1,4 @@
-#include "db/StatisticsManager.h"
+#include "db/statisticsManager.h"
 #include "db/db_manager.h"
 #include "utils.h"
 #include <sstream>

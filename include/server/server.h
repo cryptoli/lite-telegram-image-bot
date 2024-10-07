@@ -7,7 +7,7 @@
 #include "config.h"
 #include "cache/CacheManager.h"
 #include "thread/thread_pool.h"
-#include "db/StatisticsManager.h"
+#include "db/statisticsManager.h"
 #include "cache/image_cache_manager.h"
 #include "server/bot.h"
 

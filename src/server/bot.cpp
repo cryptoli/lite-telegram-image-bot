@@ -7,7 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include "http/httplib.h"
-#include "Constant.h"
+#include "constant.h"
 
 Bot::Bot(const std::string& token, DBManager& dbManager) : apiToken(token), dbManager(dbManager), config("config.json") {
     initializeOwnerId();  // 初始化时获取Bot的所属者ID

@@ -9,8 +9,19 @@
 static const int urlLength = 12;
 // fileId正则表达式
 static const std::string FILE_ID_REGEX = "^[A-Za-z0-9_-]+$";
+static const int CURL_TIMEOUT = 30;
+static const int CURL_CONNECT_TIMEOUT = 10;
+static const long CURL_BUFFERSIZE = 102400L;
+static const long CURL_TCP_KEEPALIVE = 1L;
+static const long CURL_TCP_KEEPIDLE = 120L;
+static const long CURL_TCP_KEEPINTVL = 60L;
+static const size_t MAX_GZIP_SIZE = 1048576;
 
-
+// 默认mime type
+static const std::string DEFAULT_MIME_TYPE = "application/octet-stream";
+static const std::string MIME_TYPE_IMAGE_JPEG = "image/jpeg";
+static const std::string MIME_TYPE_VIDEO_MP4 = "video/mp4";
+static const std::string BIN_STRING = "bin";
 static const std::string PHOTO = "photo";
 static const std::string DOCUMENT = "document";
 static const std::string VIDEO = "video";
@@ -31,6 +42,10 @@ static const std::string TYPE_STRING = "type";
 static const std::string CHAT_ID = "chat_id";
 static const std::string FROM_CHAT_ID = "from_chat_id";
 static const std::string DISABLE_NOTIFICATION = "disable_notification";
+static const std::string DOT_STRING = ".";
+static const std::string X_REAL_IP = "X-Real-IP";
+static const std::string X_FORWARDED_FOR = "X-Forwarded-For";
+static const std::string UNKNOWN = "unknown";
 
 static const std::string NORMAL_MESSAGE = "**请向我发送或转发图片/视频/贴纸/文档/音频/GIF，我会返回对应的url；将我拉入群聊使用/collet回复其他人发的对话也会返回对应的url。**";
 static const std::string CLOSE_REGISTER_MESSAGE = "注册已关闭";

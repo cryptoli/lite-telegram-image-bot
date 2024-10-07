@@ -8,7 +8,7 @@
 #include "cache/CacheManager.h"
 #include "http/http_client.h"
 #include "server/PicGoHandler.h"
-#include "Constant.h"
+#include "constant.h"
 #include <memory>
 #include <fstream>
 #include <vector>

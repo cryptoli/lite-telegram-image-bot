@@ -9,7 +9,7 @@
 #include "config.h"
 #include "cache/CacheManager.h"
 #include "thread/thread_pool.h"
-#include "db/StatisticsManager.h"
+#include "db/statisticsManager.h"
 
 // 获取文件的 MIME 类型
 std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType);

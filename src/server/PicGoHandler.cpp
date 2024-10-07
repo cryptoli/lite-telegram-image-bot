@@ -6,7 +6,7 @@
 #include "http/httplib.h"
 #include "server/PicGoHandler.h"
 #include "utils.h"
-#include "Constant.h"
+#include "constant.h"
 
 using json = nlohmann::json;
 

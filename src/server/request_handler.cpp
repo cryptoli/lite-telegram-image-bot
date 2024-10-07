@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "config.h"
 #include "db/db_manager.h"
-#include "Constant.h"
+#include "constant.h"
 #include <nlohmann/json.hpp>
 #include <regex>
 #include <curl/curl.h>
@@ -11,22 +11,21 @@
 #include <future>
 #include <sstream>
 
-std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = "application/octet-stream") {
+std::string getMimeType(const std::string& filePath, const std::map<std::string, std::string>& mimeTypes, const std::string& defaultMimeType = DEFAULT_MIME_TYPE) {
     try {
-        // 查找文件扩展名
-        size_t pos = filePath.find_last_of(".");
+        size_t pos = filePath.find_last_of(DOT_STRING);
         std::string extension;
         
         if (pos != std::string::npos && pos != filePath.length() - 1) {
             extension = filePath.substr(pos);
             std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
         }
-        if (extension.empty() || extension == "bin") {
-            if (filePath.find("photo") != std::string::npos) {
-                return "image/jpeg";
+        if (extension.empty() || extension == BIN_STRING) {
+            if (filePath.find(PHOTO) != std::string::npos) {
+                return MIME_TYPE_IMAGE_JPEG;
             }
-            if (filePath.find("video") != std::string::npos) {
-                return "video/mp4";
+            if (filePath.find(VIDEO) != std::string::npos) {
+                return MIME_TYPE_VIDEO_MP4;
             }
         }
         auto it = mimeTypes.find(extension);
@@ -41,7 +40,7 @@ std::string getMimeType(const std::string& filePath, const std::map<std::string,
 }
 
 std::string getFileExtension(const std::string& filePath) {
-    std::size_t pos = filePath.find_last_of(".");
+    std::size_t pos = filePath.find_last_of(DOT_STRING);
     if (pos != std::string::npos) {
         return filePath.substr(pos);
     }
@@ -91,23 +90,23 @@ void handleStreamRequest(const httplib::Request& req, httplib::Response& res, co
 }
 
 std::string getClientIp(const httplib::Request& req) {
-    if (req.has_header("X-Forwarded-For")) {
-        std::string forwardedFor = req.get_header_value("X-Forwarded-For");
+    if (req.has_header(X_FORWARDED_FOR)) {
+        std::string forwardedFor = req.get_header_value(X_FORWARDED_FOR);
         size_t commaPos = forwardedFor.find(',');
         if (commaPos != std::string::npos) {
             return forwardedFor.substr(0, commaPos);
         }
         return forwardedFor;
     }
-    if (req.has_header("X-Real-IP")) {
-        return req.get_header_value("X-Real-IP");
+    if (req.has_header(X_REAL_IP)) {
+        return req.get_header_value(X_REAL_IP);
     }
     return req.remote_addr;
 }
 
 std::string determineFileType(const std::string& requestPath) {
 
-    auto pos = requestPath.rfind('.');
+    auto pos = requestPath.rfind(DOT_STRING);
     if (pos != std::string::npos) {
         std::string extension = requestPath.substr(pos + 1);
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
@@ -118,7 +117,7 @@ std::string determineFileType(const std::string& requestPath) {
         }
     }
     
-    return "unknown";
+    return UNKNOWN;
 }
 
 void handleMediaRequestWithTiming(const httplib::Request& req, httplib::Response& res, const Config& config, CacheManager& cacheManager,
